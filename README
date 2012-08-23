@@ -1,1 +1,15 @@
-Me!
+--- Security Definition Checker ---
+
+--- Design Docs ---
+
+In general: base the design on Meyden paper (easier to implement!)
+
+* For now, consider each state as an observation (different state == different observation) (so not based on output but easier)
+  -- Keep "output/obs" function in the system, but if not supplied then make the default one, such that each S * D has different O.
+* The system: L->H->D, and H->L->D will result in different ipurge
+* Make another definition based on Meyden's TA (http://www.cse.unsw.edu.au/~meyden/research/wiini.pdf)
+* The above system will be ipurge-secure but not TA-secure
+  -- with ipurge, different ipurge == different observation so OK
+  -- with TA, same TA but different observation so not OK
+* Security policy is simple dumbed-down version of MLS. We define L, D and H as separate types and relation between each (e.g. less, higher...)
+
