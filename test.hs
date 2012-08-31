@@ -1,18 +1,21 @@
+{-# LANGUAGE GADTs #-}
+
 module Main where
 
 import SecurityBasics
 import TwoLevelMLS
 
 data MyState = S1 | S2 | S3
-data MyAction = A1 | A2
+-- data MyAction = A1 | A2
+type MyAction n = NatSet n
 data MyObservation = O1 | O2 | O3
 
-my_sys_step :: MyState -> MyAction -> MyState
-my_sys_step S1 A1 = S2
-my_sys_step S1 A2 = S3
+my_sys_step :: MyState -> MyAction n -> MyState
+my_sys_step S1 (NSSuc NSZero) = S2
+my_sys_step S1 (NSSuc (NSSuc NSZero)) = S3
 my_sys_step S2 _  = S3
-my_sys_step S3 A1 = S3
-my_sys_step S3 A2 = S1
+my_sys_step S3 (NSSuc NSZero) = S3
+my_sys_step S3 (NSSuc (NSSuc NSZero)) = S1
 
 my_sys_obs :: MyState -> LowHigh -> MyObservation
 my_sys_obs S1 Low  = O1
@@ -22,11 +25,11 @@ my_sys_obs S2 High = O2
 my_sys_obs S3 Low  = O3
 my_sys_obs S3 High = O3
 
-my_sys_dom :: MyAction -> LowHigh
-my_sys_dom A1 = Low
-my_sys_dom A2 = Low
+my_sys_dom :: MyAction n -> LowHigh
+my_sys_dom (NSSuc NSZero) = Low
+my_sys_dom (NSSuc (NSSuc NSZero)) = Low
 
-my_sys :: System MyState MyAction MyObservation LowHigh
+my_sys :: System Nat MyState (MyAction n) MyObservation LowHigh
 my_sys = System {
         initial = S1,
         step = my_sys_step,
