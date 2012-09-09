@@ -30,6 +30,7 @@ sizeNS :: NatSet n -> Nat
 sizeNS NSZero    = Zero
 sizeNS (NSSuc n) = Suc (sizeNS n)
 
+-- Singleton type
 data Singleton :: Nat -> * where
     SZero :: Singleton Zero
     SSuc  :: Singleton n -> Singleton (Suc n)
@@ -41,7 +42,7 @@ allNS (SSuc n) = NSZero : map NSSuc (allNS n)
 permuteNS :: Singleton n -> [[NatSet n]]
 permuteNS s = concatMap permutations $ subsequences $ allNS s
 
-newtype Policy a = Policy { inter :: a -> a -> Bool }
+data Policy a = Policy { inter :: a -> a -> Bool }
 noninter (Policy f) a b = not (f a b)
 
 -- System is also (semi-)parametrised by the domains (and thus policies) too.
@@ -49,7 +50,8 @@ data System state action obs domain = System
                 { initial :: state,
                   step :: state -> action -> state,
                   obs :: state -> domain -> obs,
-                  dom :: action -> domain
+                  dom :: action -> domain,
+                  action_list :: [action] --temporary
                 };
 
 

@@ -1,9 +1,11 @@
 {-# LANGUAGE GADTs, DataKinds #-}
 
+-- Test system from Ron van der Meyden's prelim report, "What, indeed, is non-transitive interference?"
+
 module Main where
 
 import SecurityBasics
-import TwoLevelMLS
+import ThreeLevelMLS
 import SecuritySystem
 import DefaultSecurityDefinitions
 
