@@ -3,7 +3,7 @@
 module Singletons where
 
 -- Peano naturals, used to represent Ints on type level
-data Nat = Zero | Suc Nat
+data Nat = Zero | Suc Nat deriving (Eq, Ord)
 
 intToNat :: Int -> Nat
 intToNat 0 = Zero
@@ -57,6 +57,23 @@ singletonToNat (SSuc n) = Suc $ singletonToNat n
 data Exists :: (Nat -> *) -> * where
     ExistsNat :: (GenSingleton x) => v x -> Exists v
     ExistsOnly :: v x -> Exists v
+
+-- This is not ideal. There should be better way to do this.
+instance Eq (Exists Singleton) where
+    (==) (ExistsNat m) (ExistsNat n) = (singletonToNat m) == (singletonToNat n)
+
+-- Even worse, but we *really* need this.
+-- Usually type checker will ensure it won't even accept two differently-typed things,
+-- but not if they are inside Exists.
+instance Eq (Exists NatSet) where
+    (==) (ExistsOnly m) (ExistsOnly n) = (sizeNS m) == (sizeNS n)
+
+-- Oh god.
+instance Ord (Exists Singleton) where
+    compare (ExistsNat m) (ExistsNat n) = compare (singletonToNat m) (singletonToNat n)
+
+instance Ord (Exists NatSet) where
+    compare (ExistsOnly m) (ExistsOnly n) = compare (sizeNS m) (sizeNS n)
 
 -- Then we can have this
 natToSingleton :: Nat -> Exists Singleton
