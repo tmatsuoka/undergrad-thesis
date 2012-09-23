@@ -29,33 +29,41 @@ type TransitionIds = Map.Map (StateId, ActionId) StateId
 type ObservationIds = Map.Map (StateId, DomainId) ObservationSymbol
 type InterferenceIds = Set.Set (DomainId, DomainId)
 
--- States, Domains, Domains * Actions, Transition map, Observation map and Interference set
-type EDSLData = (StateIds, DomainIds, DomIds, TransitionIds, ObservationIds, InterferenceIds)
+-- States, Domains, Domains * Actions, Transition map, Observation map and initial state
+type EDSLData = (StateIds, DomainIds, DomIds, TransitionIds, ObservationIds, Maybe StateId)
 
 emptyEDSL :: EDSLData
-emptyEDSL = (Set.empty, Set.empty, Set.empty, Map.empty, Map.empty, Set.empty)
+emptyEDSL = (Set.empty, Set.empty, Set.empty, Map.empty, Map.empty, Nothing)
+
+isStateNull :: EDSLData -> Bool
+isStateNull (ss, _, _, _, _, _) = Set.null ss
 
 addState :: StateId -> EDSLData -> EDSLData
-addState state (ss, ds, as, trans, obser, inter) = (Set.insert state ss, ds, as, trans, obser, inter)
+addState state (ss, ds, as, trans, obser, init) = (Set.insert state ss, ds, as, trans, obser, init)
 
 addDomain :: DomainId -> EDSLData -> EDSLData
-addDomain domain (ss, ds, as, trans, obser, inter) = (ss, Set.insert domain ds, as, trans, obser, inter)
+addDomain domain (ss, ds, as, trans, obser, init) = (ss, Set.insert domain ds, as, trans, obser, init)
 
 addAction :: DomainId -> ActionId -> EDSLData -> EDSLData
-addAction domain action (ss, ds, as, trans, obser, inter) = (ss, ds, Set.insert (domain, action) as, trans, obser, inter)
+addAction domain action (ss, ds, as, trans, obser, init) = (ss, ds, Set.insert (domain, action) as, trans, obser, init)
 
 addActions :: DomainId -> [ActionId] -> EDSLData -> EDSLData
 addActions _ [] edsl = edsl
 addActions d (a:as) edsl = addActions d as $ addAction d a edsl
 
 addObs :: (StateId, DomainId) -> ObservationSymbol -> EDSLData -> EDSLData
-addObs tuple obs (ss, ds, as, trans, obser, inter) = (ss, ds, as, trans, Map.insert tuple obs obser, inter)
+addObs tuple obs (ss, ds, as, trans, obser, init) = (ss, ds, as, trans, Map.insert tuple obs obser, init)
 
 addTrans :: (StateId, ActionId) -> StateId -> EDSLData -> EDSLData
-addTrans fromTuple to (ss, ds, as, trans, obser, inter) = (ss, ds, as, Map.insert fromTuple to trans, obser, inter)
+addTrans fromTuple to (ss, ds, as, trans, obser, init) = (ss, ds, as, Map.insert fromTuple to trans, obser, init)
 
-addInterference :: (DomainId, DomainId) -> EDSLData -> EDSLData
-addInterference tuple (ss, ds, as, trans, obser, inter) = (ss, ds, as, trans, obser, Set.insert tuple inter)
+addInitial :: StateId -> EDSLData -> EDSLData
+addInitial initial edsl@(ss, ds, as, trans, obser, init) = case init of 
+    Just init_s -> edsl
+    Nothing     -> (ss, ds, as, trans, obser, Just initial)
+
+-- addInterference :: (DomainId, DomainId) -> EDSLData -> EDSLData
+-- addInterference tuple (ss, ds, as, trans, obser, inter) = (ss, ds, as, trans, obser, Set.insert tuple inter)
 
 -- actions: Declares available actions in the system, and binds them with corresponding security domain.
 
@@ -67,15 +75,20 @@ actions domain actions = modify (\edsl -> addActions domain actions $ addDomain 
 -- obs :: MonadState EDSLData m => (StateId, DomainId) -> ObservationSymbol -> m ()
 obs tuple observation = modify $ addObs tuple observation
 
+-- init: Defines initial state.
+
+-- init :: MonadState EDSLData m => StateId -> m ()
+init state = modify $ addInitial state
+
 -- (~>): Transition operator
 
 -- (~>) :: MonadState EDSLData m => (StateId, ActionId) -> StateId -> m ()
-(~>) (from, action) to = modify (\edsl -> addTrans (from, action) to $ addState to $ addState from edsl)
+(~>) (from, action) to = modify (\edsl -> addTrans (from, action) to $ addState to $ addState from $ addInitial from edsl)
 
 -- (>->): Interference operator
 
 -- (>->) :: MonadState EDSLData m => DomainId -> DomainId -> m ()
-(>->) a b = modify $ addInterference (a, b)
+-- (>->) a b = modify $ addInterference (a, b)
 
 -- parse: Parses eDSL to build EDSLData
 
@@ -94,9 +107,9 @@ type StateAssoc = [(EDSLState, StateId)]
 type DomainAssoc = [(EDSLDomain, DomainId)]
 type ActionAssoc = [(EDSLAction, ActionId)]
 type DomIntermediate = [(EDSLDomain, EDSLAction)]
-type InterferenceIntermediate = [(EDSLDomain, EDSLDomain)]
+-- type InterferenceIntermediate = [(EDSLDomain, EDSLDomain)]
 
-type EDSLIntermediate = (StateAssoc, DomainAssoc, ActionAssoc, DomIntermediate, TransitionIds, ObservationIds, InterferenceIntermediate)
+type EDSLIntermediate = (StateAssoc, DomainAssoc, ActionAssoc, DomIntermediate, TransitionIds, ObservationIds, EDSLState)
 
 -- Get a size of set and wrap with Exists Singleton
 
@@ -124,14 +137,17 @@ lookupNS name list = case List.find (\(ns, id) -> id == name) list of
 -- Stage 1: Convert states and domain into intermediate representation (Exists NatSet).
 
 stage_one :: EDSLData -> EDSLIntermediate
-stage_one (ss, ds, as, trans, obser, inter) = (ss_ns, ds_ns, as_ns, dom, trans, obser, inter_ns)
+stage_one (ss, ds, as, trans, obser, init) = (ss_ns, ds_ns, as_ns, dom, trans, obser, init_ns)
     where ss_ns = convertNS ss
           ds_ns = convertNS ds
           as_ns = convertNS $ Set.map (\tuple -> snd tuple) as
           dom = map (\(d, a) -> (lookupNS d ds_ns, lookupNS a as_ns)) (Set.toList as)
+          init_ns = case init of
+            Just init_s -> lookupNS init_s ss_ns
+            Nothing     -> error ("No initial state detected")
           -- We aren't converting transition/observation table here, as it's inefficient and
           -- Map.map/mapKeys can't handle Exists NatSet (which isn't a member of Ord)
-          inter_ns = map (\(d1, d2) -> (lookupNS d1 ds_ns, lookupNS d2 ds_ns)) $ Set.toList inter
+          -- inter_ns = map (\(d1, d2) -> (lookupNS d1 ds_ns, lookupNS d2 ds_ns)) $ Set.toList inter
 
 -- This is why we need Eq for Exists NatSet.
 
@@ -162,8 +178,9 @@ eDSLdom dom action = case List.find (\(d, a) -> a == action) dom of
 
 -- Stage 2: Pack the intermediate representation into System.
 
-stage_two (ss_ns, ds_ns, as_ns, dom, trans, obser, inter_ns) = SB.System {
-    SB.initial     = fst $ head ss_ns, -- For now. Obviously we need a way to specify this in eDSL.
+stage_two (ss_ns, ds_ns, as_ns, dom, trans, obser, init_ns) = SB.System {
+    SB.initial     = init_ns,
+    -- SB.initial     = fst $ head ss_ns, -- For now. Obviously we need a way to specify this in eDSL.
 
     -- Functions below need states/domains/actions associative list and transition tables.
     -- But System doesn't have to store them - Haskell has partially applied function!
