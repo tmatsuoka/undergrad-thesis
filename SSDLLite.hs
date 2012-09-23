@@ -4,6 +4,8 @@ Parses action declaration and transition function, and stores into corresponding
 state list, action list and transition map, with a help of State monad.
 -}
 
+module SSDLLite where
+
 import Control.Monad.State
 import qualified Data.List as List
 import qualified Data.Set as Set
@@ -119,7 +121,7 @@ lookupNS name list = case List.find (\(ns, id) -> id == name) list of
     Just (ns, id) -> ns
     Nothing       -> error ("NatSet for identifier " ++ name ++ " was not found.")
 
--- Stage 1: Convert states and domain into Singletons.
+-- Stage 1: Convert states and domain into intermediate representation (Exists NatSet).
 
 stage_one :: EDSLData -> EDSLIntermediate
 stage_one (ss, ds, as, trans, obser, inter) = (ss_ns, ds_ns, as_ns, dom, trans, obser, inter_ns)
@@ -158,7 +160,7 @@ eDSLdom dom action = case List.find (\(d, a) -> a == action) dom of
     Just (d, a) -> a
     Nothing     -> error ("EDSL Dom: domain for action " ++ show action ++ " was not found.")
 
--- Stage 2: Package them together into System.
+-- Stage 2: Pack the intermediate representation into System.
 
 stage_two (ss_ns, ds_ns, as_ns, dom, trans, obser, inter_ns) = SB.System {
     SB.initial     = fst $ head ss_ns, -- For now. Obviously we need a way to specify this in eDSL.

@@ -1,0 +1,118 @@
+Security System Description Library (SSDL) or SSDL-Lite
+
+* Motivation
+
+We don't have enough time writing the whole parser/evaluator for Security System Description Language (SSDL, or SSDL-full).
+
+Instead we go for eDSL approach - the one that exposes all Haskell internal details.
+
+* Actions
+
+All actions *must* to be explicitly defined before use.
+
+Syntax:
+
+actions low  = ["A1", "A2", "A3", ..., ]
+actions high = ["A4", "A5", "A6", ..., ]
+
+This defines available actions for each security domain.
+
+-- Implementation Details
+
+Actions are defined as a function of:
+
+actions :: Domain -> [String]
+
+Argument is a string identifier of security domain. Result is a list of action identifiers.
+
+eDSL Library then wraps this function to generate corresponding action data constructors, to provide something like:
+
+actions_evaluated :: Domain -> [Action]
+
+* Security Domains
+
+Unlike SSDL-full, security domains must also be explicitly defined. Fortunately that isn't too hard:
+
+data Domain = low | high
+
+* Observations
+
+Observations are defined either individually, or with a simple function.
+
+Syntax:
+
+obs "A1" low  = "A1_observation"
+obs "A1" high = "A1_observation_high"
+
+or
+
+obs a u = ipurge a u
+
+-- Implementation Details
+
+obs :: String -> Domain -> String
+
+All observations are internally represented as a string.
+
+* States
+
+All states are implicitly defined to be the all possible sequence of all available actions.
+
+* Functions
+
+Since SSDL is Haskell-based eDSL, all functions can do whatever Haskell allows.
+
+In addition SSDL provides the following functions by default:
+
+ * purge :: [String] -> Domain -> [String]
+   purge actions domain = purged_actions
+ * ipurge :: [String] -> Domain -> [String]
+   ipurge actions domain = ipurged_actions
+
+* Security Domain Relationship
+
+Security domain relationship, or security policy, must be defined as an instance of type Policy:
+
+lowHighPolicy :: Policy LowHigh
+lowHighPolicy = Policy {
+    inter = lowHighPolicyInter
+} where
+    lowHighPolicyInter Low High = True
+    lowHighPolicyInter _   _    = False
+
+TODO: Any way to clean this thing up?
+
+* Transitions
+
+Due to all states implicitly defined to be the action sequences, there are no explicit transitions.
+
+(TODO: Is this too limiting? Can this restriction still allows us to represent all finite state machines out there?)
+
+* Comments
+
+Start any line with -- and they are comments. Additionally {- comment blocks -} are allowed too.
+
+* Example
+
+data MLSDomains = High1 | High2 | Down1 | Down2 | Low
+
+actions High1  = ["H1"]
+actions High2  = ["H2"]
+actions Down1  = ["D1"]
+actions Down2  = ["D2"]
+actions Low    = ["L"]
+
+-- implicit states = sequence of actions
+
+obs a u = ipurge a u
+
+MLSPolicy :: Policy MLSDomains
+MLSPolicy = Policy {
+    inter = MLSPolicyInter
+} where
+    MLSPolicyInter High_1 Down_1 = True
+    MLSPolicyInter High_2 Down_2 = True
+    MLSPolicyInter Down_1 Low    = True
+    MLSPolicyInter Down_2 Low    = True
+    MLSPolicyInter _      _      = False
+

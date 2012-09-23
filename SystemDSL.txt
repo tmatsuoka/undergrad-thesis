@@ -1,0 +1,84 @@
+* Actions and Security Domains
+
+All actions *must* to be explicitly defined before use.
+
+Syntax:
+
+actions[low] = [A1, A2, A3, ..., ]
+actions[high] = [A4, A5, A6, ..., ]
+
+This defines available actions for each security domain. Security domains are defined implicitly here too.
+
+* Observations
+
+Observations are defined either individually, or with a simple function.
+
+Syntax:
+
+obs(A1, low) = A1_observation
+obs(A1, high) = A1_observation_high
+
+or
+
+obs(forall a, forall u) = ipurge(a, u)
+
+Function syntax are followed below.
+
+* States
+
+States are not required to be defined; if they are not, then they are assumed to be permutations of all available actions.
+
+However they can be defined optionally as follows:
+
+Syntax:
+
+states = [S1, S2, S3, S4, ..., ]
+
+* Functions
+
+Operations available:
+(.) = Concatenation
+
+Built-in functions:
+  purge(action, domain)
+  ipurge(action, domain)
+
+* Security Domain Relationship
+
+Syntax:
+
+low >-> high
+
+* Transitions
+
+Transition is a simple function too. Either define explicitly:
+
+step(S1, A1) = S2
+
+or generally:
+
+step(forall s, forall a) = s.a
+
+* Comments
+
+Start any line with -- and they are comments.
+
+* Example
+
+actions[high_1] = [H1]
+actions[high_2] = [H2]
+actions[down_1] = [D1]
+actions[down_2] = [D2]
+actions[low]    = [L]
+
+-- implicit states = sequence of actions
+
+obs(forall a, forall u) = ipurge(a, u)
+
+high_1 >-> down_1
+high_2 >-> down_2
+down_1 >-> low
+down_2 >-> low
+
+step(forall s, forall a) = s.a
+
