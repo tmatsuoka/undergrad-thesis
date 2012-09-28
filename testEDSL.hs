@@ -1,6 +1,10 @@
 import SSDLLite
 
-my_sys = stage_two $ stage_one $ parse $ do
+my_policy = do
+    domains ["low", "high"]
+    "low" >-> "high"
+
+my_sys = do
     actions "low" ["A1", "A2"]
     ("S1", "A1") ~> "S2"
     ("S1", "A2") ~> "S3"
@@ -14,6 +18,8 @@ my_sys = stage_two $ stage_one $ parse $ do
     obs ("S2", "high") "O2"
     obs ("S3", "low") "O3"
     obs ("S3", "high") "O3"
+
+mySystem = makeSystem my_policy my_sys
 
 main = putStrLn "Hello World!"
 

@@ -12,8 +12,8 @@ run sys s (a:as) = run sys ((step sys) s a) as
 do_run :: System s a o p -> [a] -> s
 do_run sys as = run sys (initial sys) as
 
-getActions :: System s a o p -> [a]
-getActions sys = action_list sys
+-- getActions :: System s a o p -> [a]
+-- getActions sys = action_list sys
 
 {-
 This permutation function isn't right.
@@ -24,8 +24,8 @@ We need to do the following to fix this:
 3) Return resulting [[Action]]. Security definitions can use this to check
    system for all states * domain combinations (which is how obs function is defined)
 -}
-getActionPermutation :: System s a o p -> [[a]]
-getActionPermutation sys = concatMap permutations $ subsequences $ getActions sys
+-- getActionPermutation :: System s a o p -> [[a]]
+-- getActionPermutation sys = concatMap permutations $ subsequences $ getActions sys
 
 -- test :: System s a o p -> [a] -> a -> o
 -- test sys as a = obs sys (do_run sys as) a

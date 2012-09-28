@@ -13,9 +13,9 @@ data System state action obs domain = System
                   step :: state -> action -> state,
                   obs :: state -> domain -> obs,
                   dom :: action -> domain,
-                  action_list :: [action] --temporary
+                  action_list :: [action], --temporary
+                  policy :: Policy domain --temporary?
                 };
-
 
 {-
 instance (Arbitrary s, Arbitrary a, Arbitary d) => Arbitrary (System s a d)
