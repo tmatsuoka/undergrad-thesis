@@ -8,7 +8,8 @@ state list, action list and transition map, with a help of State monad.
 
 -}
 
-module SSDLLite where
+module SSDLLite (domains, (>->), actions, obs, SSDLLite.init, (~>),
+                 makeSystem, stepEDSL, obsEDSL, domEDSL, runEDSL, doRunEDSL) where
 
 import Control.Monad.State
 import qualified Data.List as List
@@ -135,11 +136,13 @@ type DomainAList n = [DomainAssoc n]
 type ActionAList n = [ActionAssoc n]
 type DomIntermediate d a = [(DomainAssoc d, ActionAssoc a)]
 type TransIntermediate s a = Map (StateAssoc s, ActionAssoc a) (StateAssoc s)
+type ObserIntermediate s d = Map (StateAssoc s, DomainAssoc d) ObservationSymbol
 type InterferenceAssoc n = [(DomainAssoc n, DomainAssoc n)]
 
 type PolicyIntermediate n = (DomainAssoc n, InterferenceAssoc n)
-type EDSLIntermediate s d a =
-    (StateAList s, DomainAList d, ActionAList a, DomIntermediate d a, TransIntermediate s a, ObservationIds, InterferenceAssoc d, StateAssoc s)
+type EDSLIntermediate s a d =
+    (StateAList s, DomainAList d, ActionAList a, DomIntermediate d a,
+     TransIntermediate s a, ObserIntermediate s d, InterferenceAssoc d, StateAssoc s)
 
 data ExistsAList where
     ExA :: AList n -> ExistsAList
@@ -175,17 +178,23 @@ lookupId thing list = case List.find (\(ns, id) -> ns == thing) list of
 -- Stage 1: Convert parsed EDSL data into intermediate representation (NatSet n).
 -- Holy crap this is ugly - anyone please come up with a better way to write this?
 
+genAssoc :: AList n -> Id -> Assoc n
+genAssoc list id = (lookupNS id list, id)
+
+genAssocTwo :: AList m -> AList n -> (Id, Id) -> (Assoc m, Assoc n)
+genAssocTwo list1 list2 (id1, id2) = (genAssoc list1 id1, genAssoc list2 id2)
+
 prepare :: PrePolicy -> EDSLData -> ExistsEDSLIntermediate
 prepare (ds, inter) (ss, as, trans, obser, init) = 
     case convertNS $ Set.toList ss of
       ExA ss_ns -> case convertNS $ Set.toList ds of
         ExA ds_ns -> case convertNS $ map (\tuple -> snd tuple) $ Set.toList as of
-          ExA as_ns -> ExI (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, init_ns)
+          ExA as_ns -> ExI (ss_ns, ds_ns, as_ns, dom, trans_ns, obser_ns, inter_ns, init_ns)
             where
-              dom      = map (\(d_id, a_id) -> ((lookupNS d_id ds_ns, d_id), (lookupNS a_id as_ns, a_id))) (Set.toList as)
-              trans_ns = Map.map (\(s_id) -> (lookupNS s_id ss_ns, s_id)) $
-                         Map.mapKeys (\(s_id, a_id) -> ((lookupNS s_id ss_ns, s_id), (lookupNS a_id as_ns, a_id))) trans
-              inter_ns = map (\(d1_id, d2_id) -> ((lookupNS d1_id ds_ns, d1_id), (lookupNS d2_id ds_ns, d2_id))) $ Set.toList inter
+              dom      = map (genAssocTwo ds_ns as_ns) (Set.toList as)
+              trans_ns = Map.map (genAssoc ss_ns) $ Map.mapKeys (genAssocTwo ss_ns as_ns) trans
+              obser_ns = Map.mapKeys (genAssocTwo ss_ns ds_ns) obser
+              inter_ns = map (genAssocTwo ds_ns ds_ns) $ Set.toList inter
               init_ns  = case init of 
                 Just init_id -> (lookupNS init_id ss_ns, init_id)
                 Nothing     -> error "No initial state detected"
@@ -195,8 +204,8 @@ prepare (ds, inter) (ss, as, trans, obser, init) =
 eDSLstep :: TransIntermediate s a -> StateAssoc s -> ActionAssoc a -> StateAssoc s
 eDSLstep trans from action = trans Map.! (from, action)
 
-eDSLobs :: ObservationIds -> StateAssoc m -> DomainAssoc n -> ObservationSymbol
-eDSLobs obs (_, s) (_, d) = obs Map.! (s, d)
+eDSLobs :: ObserIntermediate s d -> StateAssoc s -> DomainAssoc d -> ObservationSymbol
+eDSLobs obs s d = obs Map.! (s, d)
 
 eDSLdom :: DomIntermediate m n -> ActionAssoc n -> DomainAssoc m
 eDSLdom dom action = case List.find (\(d, a) -> a == action) dom of
@@ -213,12 +222,33 @@ edslPolicyInter inter_ns a b = List.elem (a, b) inter_ns
 buildPolicy :: InterferenceAssoc n -> SB.Policy (DomainAssoc n)
 buildPolicy inter_ns = SB.Policy { SB.inter = edslPolicyInter inter_ns }
 
-data ExistsSystem where
-    ExS :: SB.System s a o d -> ExistsSystem
+data EDSLSystem s a d = EDSLSystem {
+    base :: SB.System (StateAssoc s) (ActionAssoc a) ObservationSymbol (DomainAssoc d),
+    intermediate :: EDSLIntermediate s a d
+}
+
+data ExistsEDSLSystem where
+    ExES :: EDSLSystem s d a -> ExistsEDSLSystem
+
+instance Show ExistsEDSLSystem where
+    show (ExES sys) = "=== EDSL generated system ===\n" ++
+                      "Initial state: " ++ show (SB.initial base_sys) ++ "\n" ++
+                      "States: " ++ show ss_ns ++ "\n" ++
+                      "Actions: " ++ show dom ++ "\n" ++
+                      "Transitions: " ++ show_trans ++ "\n" ++
+                      "Observatons: " ++ show_obs
+        where base_sys = base sys
+              (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, _, _) = intermediate sys
+              show_trans = foldl (\a b -> a ++ "\n" ++ b) ""
+                           (map (\((from, action), to) -> "(" ++ show from ++ ", " ++ show action ++ ") ~> " ++ show to) $
+                            Map.toList trans_ns)
+              show_obs   = foldl (\a b -> a ++ "\n" ++ b) ""
+                           (map (\((s, d), o) -> "(" ++ show s ++ ", " ++ show d ++ ") >? " ++ show o) $
+                            Map.toList obser)
 
 -- Stage 2: Pack the intermediate representation into System.
 
-build :: EDSLIntermediate s d a -> SB.System (StateAssoc s) (ActionAssoc a) ObservationSymbol (DomainAssoc d)
+build :: EDSLIntermediate s a d -> SB.System (StateAssoc s) (ActionAssoc a) ObservationSymbol (DomainAssoc d)
 build (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, init) = SB.System {
     SB.initial     = init,
     SB.step        = eDSLstep trans_ns,
@@ -227,11 +257,40 @@ build (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, init) = SB.System {
     SB.policy      = buildPolicy inter_ns
 }
 
-buildExists :: ExistsEDSLIntermediate -> ExistsSystem
-buildExists (ExI intermediate) = ExS (build intermediate)
+buildExists :: ExistsEDSLIntermediate -> ExistsEDSLSystem
+buildExists (ExI intermediate) = ExES (EDSLSystem (build intermediate) intermediate)
 
 -- A single do-it-all function that takes in EDSL description for policy and system and builds SB.System (which includes SB.Policy)
 
--- makeSystem :: State PrePolicy () -> State EDSLData () -> ExistsSystem
+makeSystem :: State PrePolicy () -> State EDSLData () -> ExistsEDSLSystem
 makeSystem policyDesc systemDesc = buildExists $ prepare (parsePolicy policyDesc) (parse systemDesc)
+
+-- System functions that work over EDSL identifiers instead of NatSet n
+
+stepEDSL :: ExistsEDSLSystem -> StateId -> ActionId -> StateId
+stepEDSL (ExES sys) from_id action_id = to
+    where (ss_ns, _, as_ns, _, _, _, _, _) = intermediate sys
+          from = genAssoc ss_ns from_id
+          action = genAssoc as_ns action_id
+          (_, to) = (SB.step (base sys)) from action
+
+obsEDSL :: ExistsEDSLSystem -> StateId -> DomainId -> ObservationSymbol
+obsEDSL (ExES sys) s_id d_id = (SB.obs (base sys)) s d
+    where (ss_ns, ds_ns, _, _, _, obser, _, _) = intermediate sys
+          s = genAssoc ss_ns s_id
+          d = genAssoc ds_ns d_id
+
+domEDSL :: ExistsEDSLSystem -> ActionId -> DomainId
+domEDSL (ExES sys) a_id = domain
+    where (_, _, as_ns, _, _, _, _, _) = intermediate sys
+          a = genAssoc as_ns a_id
+          (_, domain) = (SB.dom (base sys)) a
+
+runEDSL :: ExistsEDSLSystem -> StateId -> [ActionId] -> StateId
+runEDSL _ s [] = s
+runEDSL sys s (a:as) = runEDSL sys (stepEDSL sys s a) as
+
+doRunEDSL :: ExistsEDSLSystem -> [ActionId] -> StateId
+doRunEDSL exEs@(ExES sys) as = runEDSL exEs initial as
+    where (_, initial) = SB.initial (base sys)
 

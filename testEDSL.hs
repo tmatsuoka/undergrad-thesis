@@ -21,5 +21,5 @@ my_sys = do
 
 mySystem = makeSystem my_policy my_sys
 
-main = putStrLn "Hello World!"
+main = print mySystem
 
