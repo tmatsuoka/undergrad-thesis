@@ -22,11 +22,17 @@ data NatSet :: Nat -> * where
     NSSuc  :: NatSet a -> NatSet (Suc a)
 
 instance Show (NatSet n) where
-    show x = "NS" ++ show (natToInt $ sizeNS x)
+    show x = "NS" ++ show (natToInt $ nsToNat x)
 
-sizeNS :: NatSet n -> Nat
-sizeNS NSZero    = Zero
-sizeNS (NSSuc n) = Suc (sizeNS n)
+instance Eq (NatSet n) where
+    (==) m n = (nsToNat m) == (nsToNat n)
+
+instance Ord (NatSet n) where
+    compare m n = compare (nsToNat m) (nsToNat n)
+
+nsToNat :: NatSet n -> Nat
+nsToNat NSZero    = Zero
+nsToNat (NSSuc n) = Suc (nsToNat n)
 
 -- Singleton type
 data Singleton :: Nat -> * where
@@ -62,18 +68,9 @@ data Exists :: (Nat -> *) -> * where
 instance Eq (Exists Singleton) where
     (==) (ExistsNat m) (ExistsNat n) = (singletonToNat m) == (singletonToNat n)
 
--- Even worse, but we *really* need this.
--- Usually type checker will ensure it won't even accept two differently-typed things,
--- but not if they are inside Exists.
-instance Eq (Exists NatSet) where
-    (==) (ExistsOnly m) (ExistsOnly n) = (sizeNS m) == (sizeNS n)
-
 -- Oh god.
 instance Ord (Exists Singleton) where
     compare (ExistsNat m) (ExistsNat n) = compare (singletonToNat m) (singletonToNat n)
-
-instance Ord (Exists NatSet) where
-    compare (ExistsOnly m) (ExistsOnly n) = compare (sizeNS m) (sizeNS n)
 
 -- Then we can have this
 natToSingleton :: Nat -> Exists Singleton

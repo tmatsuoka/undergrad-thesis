@@ -1,3 +1,5 @@
+{-# LANGUAGE GADTs #-}
+
 {-
 
 The implementation of System eDSL (SSDL-Lite).
@@ -11,7 +13,9 @@ module SSDLLite where
 import Control.Monad.State
 import qualified Data.List as List
 import qualified Data.Set as Set
+import Data.Set (Set)
 import qualified Data.Map as Map
+import Data.Map (Map)
 
 import Singletons
 import qualified SecurityBasics as SB
@@ -115,112 +119,119 @@ parse desc = execState desc emptyEDSL
 
 -- Types for intermediate semi-system representation, and for the final system
 
-type EDSLThing = Exists NatSet
-type EDSLState = Exists NatSet
-type EDSLDomain = Exists NatSet
-type EDSLAction = Exists NatSet
+type EDSLThing  n = NatSet n
+type EDSLState  n = EDSLThing n
+type EDSLDomain n = EDSLThing n
+type EDSLAction n = EDSLThing n
 
-type Assoc = [(EDSLThing, Id)]
-type StateAssoc = [(EDSLState, StateId)]
-type DomainAssoc = [(EDSLDomain, DomainId)]
-type ActionAssoc = [(EDSLAction, ActionId)]
-type DomIntermediate = [(EDSLDomain, EDSLAction)]
-type InterferenceAssoc = [(EDSLDomain, EDSLDomain)]
+type Assoc       n = (EDSLThing n, Id)
+type StateAssoc  n = (EDSLState n, StateId)
+type DomainAssoc n = (EDSLDomain n, DomainId)
+type ActionAssoc n = (EDSLAction n, ActionId)
 
-type PolicyIntermediate = (DomainAssoc, InterferenceAssoc)
-type EDSLIntermediate = (StateAssoc, DomainAssoc, ActionAssoc, DomIntermediate, TransitionIds, ObservationIds, InterferenceAssoc, EDSLState)
+type AList       n = [Assoc n]
+type StateAList  n = [StateAssoc n]
+type DomainAList n = [DomainAssoc n]
+type ActionAList n = [ActionAssoc n]
+type DomIntermediate d a = [(DomainAssoc d, ActionAssoc a)]
+type TransIntermediate s a = Map (StateAssoc s, ActionAssoc a) (StateAssoc s)
+type InterferenceAssoc n = [(DomainAssoc n, DomainAssoc n)]
 
--- Get a size of set and wrap with Exists Singleton
+type PolicyIntermediate n = (DomainAssoc n, InterferenceAssoc n)
+type EDSLIntermediate s d a =
+    (StateAList s, DomainAList d, ActionAList a, DomIntermediate d a, TransIntermediate s a, ObservationIds, InterferenceAssoc d, StateAssoc s)
 
-sizeSingleton :: Set.Set a -> Exists Singleton
-sizeSingleton sets = intToSingleton $ Set.size sets
+data ExistsAList where
+    ExA :: AList n -> ExistsAList
 
--- Converts Exists Singleton to equivalent Exists NatSet list
+data ExistsEDSLIntermediate where
+    ExI :: EDSLIntermediate s d a -> ExistsEDSLIntermediate
 
-makeNS :: Exists Singleton -> [Exists NatSet]
-makeNS (ExistsNat n) = map ExistsOnly (allNS n)
+applyFirst :: (a -> b) -> (a, c) -> (b, c)
+applyFirst f (a, c) = (f a, c)
 
--- Converts a set of states/domains/action identifiers to equivalent associative list
+-- Converts a list of states/domains/action identifiers to equivalent associative list
 
-convertNS :: Set.Set Id -> Assoc
-convertNS set = zipWith (\a b -> (a, b)) (makeNS $ sizeSingleton set) (Set.toList set)
+convertNS :: [Id] -> ExistsAList
+convertNS [] = ExA []
+convertNS (id:ids) = case convertNS ids of
+    ExA ids_ns -> ExA ((NSZero, id) : map (applyFirst NSSuc) ids_ns)
 
 -- Finds an equivalent Exists NatSet from the associative list.
 -- Aborts the program when element isn't found, but for eDSL parsing we already know it should be there.
 
-lookupNS :: Id -> Assoc -> EDSLThing
+lookupNS :: Id -> AList n -> EDSLThing n
 lookupNS name list = case List.find (\(ns, id) -> id == name) list of
     Just (ns, id) -> ns
     Nothing       -> error ("NatSet for identifier " ++ name ++ " was not found.")
 
--- This is why we need Eq for Exists NatSet.
+-- Reverse of lookupNS.
 
-lookupId :: EDSLThing -> Assoc -> Id
+lookupId :: EDSLThing n -> AList n -> Id
 lookupId thing list = case List.find (\(ns, id) -> ns == thing) list of
     Just (ns, id) -> id
     Nothing       -> error ("Identifier for NatSet" ++ show thing ++ " was not found.")
 
--- Stage 1: Convert parsed EDSL data into intermediate representation (Exists NatSet).
+-- Stage 1: Convert parsed EDSL data into intermediate representation (NatSet n).
+-- Holy crap this is ugly - anyone please come up with a better way to write this?
 
-prepare :: PrePolicy -> EDSLData -> EDSLIntermediate
-prepare (ds, inter) (ss, as, trans, obser, init) = (ss_ns, ds_ns, as_ns, dom, trans, obser, inter_ns, init_ns)
-    where ss_ns = convertNS ss
-          ds_ns = convertNS ds
-          as_ns = convertNS $ Set.map (\tuple -> snd tuple) as
-          dom = map (\(d, a) -> (lookupNS d ds_ns, lookupNS a as_ns)) (Set.toList as)
-          inter_ns = map (\(d1, d2) -> (lookupNS d1 ds_ns, lookupNS d2 ds_ns)) $ Set.toList inter
-          init_ns = case init of
-            Just init_s -> lookupNS init_s ss_ns
-            Nothing     -> error ("No initial state detected")
-          -- We aren't converting transition/observation table here, as it's inefficient and
-          -- Map.map/mapKeys can't handle Exists NatSet (which isn't a member of Ord)
+prepare :: PrePolicy -> EDSLData -> ExistsEDSLIntermediate
+prepare (ds, inter) (ss, as, trans, obser, init) = 
+    case convertNS $ Set.toList ss of
+      ExA ss_ns -> case convertNS $ Set.toList ds of
+        ExA ds_ns -> case convertNS $ map (\tuple -> snd tuple) $ Set.toList as of
+          ExA as_ns -> ExI (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, init_ns)
+            where
+              dom      = map (\(d_id, a_id) -> ((lookupNS d_id ds_ns, d_id), (lookupNS a_id as_ns, a_id))) (Set.toList as)
+              trans_ns = Map.map (\(s_id) -> (lookupNS s_id ss_ns, s_id)) $
+                         Map.mapKeys (\(s_id, a_id) -> ((lookupNS s_id ss_ns, s_id), (lookupNS a_id as_ns, a_id))) trans
+              inter_ns = map (\(d1_id, d2_id) -> ((lookupNS d1_id ds_ns, d1_id), (lookupNS d2_id ds_ns, d2_id))) $ Set.toList inter
+              init_ns  = case init of 
+                Just init_id -> (lookupNS init_id ss_ns, init_id)
+                Nothing     -> error "No initial state detected"
 
 -- step function we're using for eDSL-built systems. Notice we are passing states/actions/transitions here.
 
-eDSLstep :: StateAssoc -> ActionAssoc -> TransitionIds -> EDSLState -> EDSLAction -> EDSLState
-eDSLstep ss as trans from action = next
-    where s_id    = lookupId from ss
-          a_id    = lookupId action as
-          next_id = trans Map.! (s_id, a_id)
-          next    = lookupNS next_id ss
+eDSLstep :: TransIntermediate s a -> StateAssoc s -> ActionAssoc a -> StateAssoc s
+eDSLstep trans from action = trans Map.! (from, action)
 
-eDSLobs :: StateAssoc -> DomainAssoc -> ObservationIds -> EDSLState -> EDSLDomain -> ObservationSymbol
-eDSLobs ss ds obs s d = obser
-    where s_id  = lookupId s ss
-          d_id  = lookupId d ds
-          obser = obs Map.! (s_id, d_id)
+eDSLobs :: ObservationIds -> StateAssoc m -> DomainAssoc n -> ObservationSymbol
+eDSLobs obs (_, s) (_, d) = obs Map.! (s, d)
 
-eDSLdom :: DomIntermediate -> EDSLAction -> EDSLDomain
+eDSLdom :: DomIntermediate m n -> ActionAssoc n -> DomainAssoc m
 eDSLdom dom action = case List.find (\(d, a) -> a == action) dom of
-    Just (d, a) -> a
+    Just (d, a) -> d
     Nothing     -> error ("EDSL Dom: domain for action " ++ show action ++ " was not found.")
 
 -- Generic interference function for EDSL-defined security policy
 
-edslPolicyInter :: InterferenceAssoc -> EDSLDomain -> EDSLDomain -> Bool
+edslPolicyInter :: InterferenceAssoc n -> DomainAssoc n -> DomainAssoc n -> Bool
 edslPolicyInter inter_ns a b = List.elem (a, b) inter_ns
 
 -- Builds a Policy from EDSL-defined interferences
 
-buildPolicy :: InterferenceAssoc -> SB.Policy EDSLDomain
+buildPolicy :: InterferenceAssoc n -> SB.Policy (DomainAssoc n)
 buildPolicy inter_ns = SB.Policy { SB.inter = edslPolicyInter inter_ns }
+
+data ExistsSystem where
+    ExS :: SB.System s a o d -> ExistsSystem
 
 -- Stage 2: Pack the intermediate representation into System.
 
-build (ss_ns, ds_ns, as_ns, dom, trans, obser, inter_ns, init_ns) = SB.System {
-    SB.initial     = init_ns,
-    -- SB.initial     = fst $ head ss_ns, -- For now. Obviously we need a way to specify this in eDSL.
-
-    -- Functions below need states/domains/actions associative list and transition tables.
-    -- But System doesn't have to store them - Haskell has partially applied function!
-    SB.step        = eDSLstep ss_ns as_ns trans,
-    SB.obs         = eDSLobs ss_ns ds_ns obser,
+build :: EDSLIntermediate s d a -> SB.System (StateAssoc s) (ActionAssoc a) ObservationSymbol (DomainAssoc d)
+build (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, init) = SB.System {
+    SB.initial     = init,
+    SB.step        = eDSLstep trans_ns,
+    SB.obs         = eDSLobs obser,
     SB.dom         = eDSLdom dom,
-    SB.action_list = map (\x -> fst x) as_ns,
     SB.policy      = buildPolicy inter_ns
 }
 
+buildExists :: ExistsEDSLIntermediate -> ExistsSystem
+buildExists (ExI intermediate) = ExS (build intermediate)
+
 -- A single do-it-all function that takes in EDSL description for policy and system and builds SB.System (which includes SB.Policy)
 
-makeSystem policyDesc systemDesc = build $ prepare (parsePolicy policyDesc) (parse systemDesc)
+-- makeSystem :: State PrePolicy () -> State EDSLData () -> ExistsSystem
+makeSystem policyDesc systemDesc = buildExists $ prepare (parsePolicy policyDesc) (parse systemDesc)
 
