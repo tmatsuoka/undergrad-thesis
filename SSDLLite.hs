@@ -234,17 +234,21 @@ instance Show ExistsEDSLSystem where
     show (ExES sys) = "=== EDSL generated system ===\n" ++
                       "Initial state: " ++ show (SB.initial base_sys) ++ "\n" ++
                       "States: " ++ show ss_ns ++ "\n" ++
+                      "Domains: " ++ show ds_ns ++ "\n" ++
                       "Actions: " ++ show dom ++ "\n" ++
                       "Transitions: " ++ show_trans ++ "\n" ++
-                      "Observatons: " ++ show_obs
+                      "Observations: " ++ show_obs ++ "\n" ++
+                      "Interferences: " ++ show_inter
         where base_sys = base sys
-              (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, _, _) = intermediate sys
+              (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, _) = intermediate sys
               show_trans = foldl (\a b -> a ++ "\n" ++ b) ""
                            (map (\((from, action), to) -> "(" ++ show from ++ ", " ++ show action ++ ") ~> " ++ show to) $
                             Map.toList trans_ns)
               show_obs   = foldl (\a b -> a ++ "\n" ++ b) ""
                            (map (\((s, d), o) -> "(" ++ show s ++ ", " ++ show d ++ ") >? " ++ show o) $
                             Map.toList obser)
+              show_inter = foldl (\a b -> a ++ "\n" ++ b) ""
+                           (map (\(d1, d2) -> show d1 ++ " >-> " ++ show d2) inter_ns)
 
 -- Stage 2: Pack the intermediate representation into System.
 
