@@ -2,6 +2,8 @@
 
 module ArbitrarySystem where
 
+import qualified Data.Map as Map
+import Data.Map (Map)
 import Control.Monad
 import Test.QuickCheck
 import Test.QuickCheck.Gen
@@ -22,9 +24,10 @@ type StateList  n = [ASState n]
 type DomainList n = [ASDomain n]
 type ActionList n = [ASAction n]
 
+type ASDomIntermediate d a = [(ASDomain d, ASAction a)]
+type ASTransIntermediate s a = Map (ASState s, ASAction a) (ASState s)
+
 {-
-type DomIntermediate d a = [(DomainAssoc d, ActionAssoc a)]
-type TransIntermediate s a = Map (StateAssoc s, ActionAssoc a) (StateAssoc s)
 type ObserIntermediate s d = Map (StateAssoc s, DomainAssoc d) ObservationSymbol
 type InterferenceAssoc n = [(DomainAssoc n, DomainAssoc n)]
 type ArbitrarySystemIntermediate s a d =
@@ -32,7 +35,7 @@ type ArbitrarySystemIntermediate s a d =
      TransIntermediate s a, ObserIntermediate s d, InterferenceAssoc d, StateAssoc s)
 -}
 type ASIntermediate s a d =
-    (StateList s, DomainList d, ActionList a, ASState s)
+    (StateList s, DomainList d, ActionList a, ASDomIntermediate d a, ASTransIntermediate s a, ASState s)
 
 data ExistsASIntermediate where
     ExAI :: ASIntermediate s d a -> ExistsASIntermediate
@@ -46,25 +49,28 @@ instance Arbitrary (Exists Singleton) where
 instance (GenSingleton n) => Arbitrary (NatSet n) where
     arbitrary = elements $ allNS value
 
+allPairs :: [a] -> [b] -> [(a, b)]
+allPairs as bs = concatMap (\a -> map (\b -> (a, b)) bs) as
+
 instance Arbitrary (ExistsASIntermediate) where
     arbitrary = do
-        s_exsing <- (arbitrary :: Gen (Exists Singleton))
-        d_exsing <- (arbitrary :: Gen (Exists Singleton))
-        a_exsing <- (arbitrary :: Gen (Exists Singleton))
-        case s_exsing of
-          (ExistsNat (s_sing :: Singleton s)) -> case d_exsing of
-            (ExistsNat (d_sing :: Singleton d)) -> case a_exsing of
-              (ExistsNat (a_sing :: Singleton a)) -> do
-                init <- elements $ ss_ns
-                return (ExAI (ss_ns, ds_ns, as_ns, init))
-                  where ss_ns = allNS s_sing
-                        ds_ns = allNS d_sing
-                        as_ns = allNS a_sing
+        (ExistsNat (s_sing :: Singleton s)) <- (arbitrary :: Gen (Exists Singleton))
+        (ExistsNat (d_sing :: Singleton d)) <- (arbitrary :: Gen (Exists Singleton))
+        (ExistsNat (a_sing :: Singleton a)) <- (arbitrary :: Gen (Exists Singleton))
+        let ss_ns = allNS s_sing
+        let ds_ns = allNS d_sing
+        let as_ns = allNS a_sing
+        init  <- elements ss_ns
+        dom   <- (\a -> do d <- elements ds_ns; return (d, a)) `mapM` as_ns
+        trans <- Map.fromList `fmap` ((\key -> do to <- elements ss_ns; return (key, to)) `mapM` (allPairs ss_ns as_ns))
+        return (ExAI (ss_ns, ds_ns, as_ns, dom, trans, init))
 
 instance Show ExistsASIntermediate where
-    show (ExAI (ss_ns, ds_ns, as_ns, init)) = "QC\n" ++
+    show (ExAI (ss_ns, ds_ns, as_ns, dom, trans, init)) = "QC\n" ++
                                               "States: " ++ (show ss_ns) ++ "\n" ++
                                               "Domains: " ++ (show ds_ns) ++ "\n" ++
                                               "Actions: " ++ (show as_ns) ++ "\n" ++
+                                              "Dom: " ++ (show dom) ++ "\n" ++
+                                              "Transitions: " ++ (show trans) ++ "\n" ++
                                               "Initial: " ++ (show init)
 
