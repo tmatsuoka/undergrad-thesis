@@ -37,7 +37,7 @@ type DomainList n = [ASDomain n]
 type ActionList n = [ASAction n]
 
 type ASDomIntermediate d a = [(ASDomain d, ASAction a)]
-type ASTransIntermediate s a = Map (ASState s, ASAction a) (ASState s)
+type ASTransIntermediate s a = Map (ASState s, ASAction a) [(ASState s)]
 type ASObserIntermediate s d = Map (ASState s, ASDomain d) ObservationSymbol
 
 type ASInterferences d = [(ASDomain d, ASDomain d)]
@@ -97,7 +97,9 @@ instance Arbitrary (ExistsASIntermediate) where
         let as_ns = allNS a_sing
         init  <- elements ss_ns
         dom   <- (\a -> do d <- elements ds_ns; return (d, a)) `mapM` as_ns
-        trans <- Map.fromList `fmap` ((\key -> do to <- elements ss_ns; return (key, to)) `mapM` (allPairs ss_ns as_ns))
+        sub_states  <- randomSubThing s_sing
+        sub_actions <- randomSubThing a_sing
+        trans <- Map.fromList `fmap` ((\key -> do to <- elements ss_ns; return (key, [to])) `mapM` (allPairs sub_states sub_actions))
         let sd_pairs = allPairs ss_ns ds_ns
         obser <- Map.fromList `fmap` ((\key -> do obs <- choose (1, length sd_pairs); return (key, show obs)) `mapM` sd_pairs)
         return (ExAI (ss_ns, ds_ns, as_ns, dom, trans, obser, inter, init))
@@ -110,8 +112,16 @@ asPolicyInter inter_ns a b = List.elem (a, b) inter_ns
 asBuildPolicy :: ASInterferences d -> Policy (ASDomain d)
 asBuildPolicy inter_ns = Policy { inter = asPolicyInter inter_ns }
 
-as_step :: ASTransIntermediate s a -> ASState s -> ASAction a -> ASState s
-as_step trans from action = trans Map.! (from, action)
+as_step :: ASTransIntermediate s a -> ASState s -> ASAction a -> Maybe (ASState s)
+as_step trans from action = 
+    if (Map.member (from, action) trans) then
+        let next = trans Map.! (from, action) in
+        if (List.null next) then
+            Nothing
+        else
+            Just (List.head next)
+    else
+        Nothing
 
 as_obs :: ASObserIntermediate s d -> ASState s -> ASDomain d -> ObservationSymbol
 as_obs obs s d = obs Map.! (s, d)
