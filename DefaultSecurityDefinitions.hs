@@ -2,7 +2,6 @@ module DefaultSecurityDefinitions where
 
 import Data.List as List
 import SecurityBasics
-import SecuritySystem
 
 {- sources :: Policy p => System -> [Action] -> p -> Set p
 sources _ [] u     = Set.Singleton u
@@ -22,10 +21,10 @@ ipurge sys actions@(a:as) u = let ss = Set.filter (\x -> x == (dom sys) x) (sour
                                     else ipurge sys as u
 -}
 
-purge :: System s a o d -> Policy d -> [a] -> d -> [a]
+purge :: System s a d -> Policy d -> [Action a] -> Domain d -> [Action a]
 purge sys p actions u = List.filter (\x -> inter p ((dom sys) x) u) actions
 
-sources :: System s a o d -> Policy d -> [a] -> d -> [d]
+sources :: System s a d -> Policy d -> [Action a] -> Domain d -> [Domain d]
 sources sys p []     u = [u]
 sources sys p (a:as) u = let next_sources = sources sys p as u
                          in let vs = List.filter (\v -> inter p ((dom sys) a) v) next_sources
@@ -33,7 +32,7 @@ sources sys p (a:as) u = let next_sources = sources sys p as u
                                  then (((dom sys) a) : next_sources)
                                  else next_sources
 
-ipurge :: Eq d => System s a o d -> Policy d -> [a] -> d -> [a]
+ipurge :: System s a d -> Policy d -> [Action a] -> Domain d -> [Action a]
 ipurge sys p []     u = []
 ipurge sys p (a:as) u = if (List.elem ((dom sys) a) (sources sys p as u))
                             then (a : (ipurge sys p as u))

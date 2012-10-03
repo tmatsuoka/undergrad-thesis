@@ -23,9 +23,6 @@ instance Arbitrary (Exists Singleton) where
 instance (GenSingleton n) => Arbitrary (NatSet n) where
     arbitrary = elements $ allNS value
 
-data ExistsSystem where
-    ExS :: System s a o d -> ExistsSystem
-
 type ASThing  n = NatSet n
 type ASState  n = ASThing n
 type ASDomain n = ASThing n
@@ -109,7 +106,7 @@ instance Arbitrary (ExistsASIntermediate) where
 asPolicyInter :: ASInterferences d -> ASDomain d -> ASDomain d -> Bool
 asPolicyInter inter_ns a b = List.elem (a, b) inter_ns
 
-asBuildPolicy :: ASInterferences d -> Policy (ASDomain d)
+asBuildPolicy :: ASInterferences d -> Policy d
 asBuildPolicy inter_ns = Policy { inter = asPolicyInter inter_ns }
 
 as_step :: ASTransIntermediate s a -> ASState s -> ASAction a -> Maybe (ASState s)
@@ -131,7 +128,7 @@ as_dom dom action = case List.find (\(d, a) -> a == action) dom of
     Just (d, a) -> d
     Nothing     -> error ("AS Dom: domain for action " ++ show action ++ " was not found.")
 
-buildAS :: ASIntermediate s a d -> System (ASState s) (ASAction a) ObservationSymbol (ASDomain d)
+buildAS :: ASIntermediate s a d -> System s a d
 buildAS (ss, ds, as, dom, trans, obser, inter, init) = System {
     initial     = init,
     step        = as_step trans,
@@ -141,12 +138,12 @@ buildAS (ss, ds, as, dom, trans, obser, inter, init) = System {
 }
 
 data ASSystem s a d = ASSystem {
-    base :: System (ASState s) (ASAction a) ObservationSymbol (ASDomain d),
+    base :: System s a d,
     intermediate :: ASIntermediate s a d
 }
 
 data ExistsASSystem where
-    ExAS :: ASSystem s d a -> ExistsASSystem
+    ExAS :: ASSystem s a d -> ExistsASSystem
 
 buildASExists :: ExistsASIntermediate -> ExistsASSystem
 buildASExists (ExAI intermediate) = ExAS (ASSystem (buildAS intermediate) intermediate)
