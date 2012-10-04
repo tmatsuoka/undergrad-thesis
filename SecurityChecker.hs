@@ -39,14 +39,18 @@ prop_ipurge_secure sys d as =
 
 -- getCase: Given a system, generates a random security domain and action sequence.
 
-getCase :: (GenSingleton a, GenSingleton d) => System s a d -> Gen (Domain d, [Action a])
+getCase :: (GenSingleton a, GenSingleton d) => System s a d -> Gen (Maybe (Domain d, [Action a]))
 getCase sys = do
     domain  <- arbitrary :: GenSingleton d => Gen (NatSet d)
-    actions <- suchThat (listOf1 $ (arbitrary :: GenSingleton a => Gen (NatSet a))) (\as -> not $ isNothing $ doRun sys as)
-    return (domain, actions)
+    maybeActions <- suchThatMaybe (listOf1 $ (arbitrary :: GenSingleton a => Gen (NatSet a))) (\as -> not $ isNothing $ doRun sys as)
+    case maybeActions of
+        Just actions -> return $ Just (domain, actions)
+        Nothing      -> return $ Nothing
 
 getCases :: (GenSingleton a, GenSingleton d) => System s a d -> Gen [(Domain d, [Action a])]
-getCases sys = vectorOf 1 $ getCase sys
+getCases sys = do
+    cases <- vectorOf 100 $ getCase sys
+    return (catMaybes cases)
 
 allWell :: (GenSingleton a, GenSingleton d) =>
            System s a d ->
