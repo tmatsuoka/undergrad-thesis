@@ -49,8 +49,10 @@ getCase sys = do
 
 getCases :: (GenSingleton a, GenSingleton d) => System s a d -> Gen [(Domain d, [Action a])]
 getCases sys = do
-    cases <- vectorOf 100 $ getCase sys
+    cases <- vectorOf 100 $ getCase sys -- Generate maximum 100 action sequences per system
     return (catMaybes cases)
+
+-- allWell: Property which checks prop1 ==> prop2 (but returning Bool instead of Property)
 
 allWell :: (GenSingleton a, GenSingleton d) =>
            System s a d ->
@@ -60,10 +62,19 @@ allWell :: (GenSingleton a, GenSingleton d) =>
            Bool
 allWell sys list prop1 prop2 = all (\(d, as) -> if not (prop1 sys d as) then True else prop2 sys d as) list
 
--- Test property which checks that all systems must be both P-secure and IP-secure. Clearly this is false (run it and see!)
+-- Test property which checks that all P-secure systems are IP-secure. Rushby and van der Meyden proved this is true, so QuickCheck should agree.
 
-prop_ip_and_p :: ExistsASSystem -> Property
-prop_ip_and_p (ExAS sys) =
+prop_p_then_ip :: ExistsASSystem -> Property
+prop_p_then_ip (ExAS sys) =
     let system = getASBase sys in
     forAll (getCases system) $ (\list -> allWell system list prop_purge_secure prop_ipurge_secure)
+
+-- Test property which checks that all IP-secure systems are P-secure. Clearly this is false.
+
+prop_ip_then_p :: ExistsASSystem -> Property
+prop_ip_then_p (ExAS sys) =
+    let system = getASBase sys in
+    forAll (getCases system) $ (\list -> allWell system list prop_ipurge_secure prop_purge_secure)
+
+-- Run prop_p_then_ip and prop_ip_then_p should convince you that P ==> IP but IP =/=> P. In other words this shows that P is strictly more secure than IP!
 
