@@ -18,7 +18,7 @@ instance Show Nat where
 
 -- Finite set with a Peano natural to specify number of elements
 data NatSet :: Nat -> * where
-    NSZero :: NatSet a
+    NSZero :: NatSet (Suc a)
     NSSuc  :: NatSet a -> NatSet (Suc a)
 
 instance Show (NatSet n) where
@@ -41,7 +41,7 @@ data Singleton :: Nat -> * where
 
 -- Given a Nat singleton, generate all elements in the NatSet of same number
 allNS :: Singleton n -> [NatSet n]
-allNS (SZero)  = [NSZero]
+allNS (SZero)  = []
 allNS (SSuc n) = NSZero : map NSSuc (allNS n)
 
 -- "Reify" type class that allows type-level Nat to be converted to Singleton

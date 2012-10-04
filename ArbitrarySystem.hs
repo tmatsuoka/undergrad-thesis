@@ -15,7 +15,7 @@ import SecurityBasics
 -- Arbitrary Nats, NatSets and Singletons
 
 instance Arbitrary Nat where
-    arbitrary = (arbitrary :: Gen (NonNegative Int)) >>= \(NonNegative x) -> return (intToNat x)
+    arbitrary = (arbitrary :: Gen (Positive Int)) >>= \(Positive x) -> return (intToNat x)
 
 instance Arbitrary (Exists Singleton) where
     arbitrary = natToSingleton `fmap` (arbitrary :: Gen Nat)
@@ -44,16 +44,19 @@ type ASInterferences d = [(ASDomain d, ASDomain d)]
 type ASPolicy d = (DomainList d, ASInterferences d)
 
 data ExistsASPolicy where
-    ExAP :: ASPolicy d -> ExistsASPolicy
+    ExAP :: (GenSingleton d) => ASPolicy d -> ExistsASPolicy
 
 -- Generates a list of NatSet n from a given singleton, then shrinks the list to a random size of [0, orig_size]
 
 randomSubThing :: Singleton n -> Gen [ASThing n]
 randomSubThing sing = do
     let orig_list = allNS sing                            -- generate all NatSet elements
-    size <- choose (0, length orig_list)                  -- then pick a random size
-    random_list <- (vectorOf size) $ (elements orig_list) -- generate random sublist
-    return (List.nub random_list)                         -- remove duplicates and done!
+    if (List.null orig_list) then
+        return []
+    else do
+        size <- choose (1, length orig_list)                  -- then pick a random size
+        random_list <- (vectorOf size) $ (elements orig_list) -- generate random sublist
+        return (List.nub random_list)                         -- remove duplicates and done!
 
 -- Make all possible pairs of the elements in the two lists
 
@@ -83,7 +86,7 @@ type ASIntermediate s a d =
      ASTransIntermediate s a, ASObserIntermediate s d, ASInterferences d, ASState s)
 
 data ExistsASIntermediate where
-    ExAI :: ASIntermediate s a d -> ExistsASIntermediate
+    ExAI :: (GenSingleton s, GenSingleton a, GenSingleton d) => ASIntermediate s a d -> ExistsASIntermediate
 
 instance Arbitrary (ExistsASIntermediate) where
     arbitrary = do
@@ -137,16 +140,20 @@ buildAS (ss, ds, as, dom, trans, obser, inter, init) = System {
     policy      = asBuildPolicy inter
 }
 
-data ASSystem s a d = ASSystem {
-    base :: System s a d,
-    intermediate :: ASIntermediate s a d
-}
+data ASSystem s a d where
+    AS :: (GenSingleton s, GenSingleton a, GenSingleton d) => System s a d -> ASIntermediate s a d -> ASSystem s a d
 
 data ExistsASSystem where
-    ExAS :: ASSystem s a d -> ExistsASSystem
+    ExAS :: (GenSingleton s, GenSingleton a, GenSingleton d) => ASSystem s a d -> ExistsASSystem
+
+getASBase :: ASSystem s a d -> System s a d
+getASBase (AS base _) = base
+
+getASIntermediate :: ASSystem s a d -> ASIntermediate s a d
+getASIntermediate (AS _ intermediate) = intermediate
 
 buildASExists :: ExistsASIntermediate -> ExistsASSystem
-buildASExists (ExAI intermediate) = ExAS (ASSystem (buildAS intermediate) intermediate)
+buildASExists (ExAI intermediate) = ExAS (AS (buildAS intermediate) intermediate)
 
 instance Show ExistsASSystem where
     show (ExAS sys) = "=== QuickCheck generated system ===\n" ++
@@ -157,8 +164,8 @@ instance Show ExistsASSystem where
                       "Transitions: " ++ show_trans ++ "\n" ++
                       "Observations: " ++ show_obs ++ "\n" ++
                       "Interferences: " ++ show_inter
-        where base_sys = base sys
-              (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, _) = intermediate sys
+        where base_sys = getASBase sys
+              (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, _) = getASIntermediate sys
               show_trans = foldl (\a b -> a ++ "\n" ++ b) ""
                            (map (\((from, action), to) -> "(" ++ show from ++ ", " ++ show action ++ ") ~> " ++ show to) $
                             Map.toList trans_ns)
