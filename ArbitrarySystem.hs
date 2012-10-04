@@ -157,25 +157,37 @@ getASIntermediate (AS _ intermediate) = intermediate
 buildASExists :: ExistsASIntermediate -> ExistsASSystem
 buildASExists (ExAI intermediate) = ExAS (AS (buildAS intermediate) intermediate)
 
+showNSPrefix :: String -> NatSet n -> String
+showNSPrefix prefix val = prefix ++ show (natToInt $ nsToNat val)
+
 instance Show ExistsASSystem where
     show (ExAS sys) = "=== QuickCheck generated system ===\n" ++
-                      "Initial state: " ++ show (initial base_sys) ++ "\n" ++
-                      "States: " ++ show ss_ns ++ "\n" ++
-                      "Domains: " ++ show ds_ns ++ "\n" ++
-                      "Actions: " ++ show dom ++ "\n" ++
-                      "Transitions: " ++ show_trans ++ "\n" ++
-                      "Observations: " ++ show_obs ++ "\n" ++
-                      "Interferences: " ++ show_inter
+                      "let arbitrary_policy = do\n" ++
+                      "    domains " ++ show ds_string ++ "\n" ++
+                      show_inter ++ "\n" ++
+                      "\n" ++
+                      "let arbitrary_system = do\n" ++
+                      "    SSDLLite.init \"" ++ showNSPrefix "s" (initial base_sys) ++ "\"\n" ++
+                      show_as ++ "\n" ++
+                      show_trans ++ "\n" ++
+                      show_obs
         where base_sys = getASBase sys
               (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, _) = getASIntermediate sys
+              ss_string  = map (showNSPrefix "s") ss_ns
+              ds_string  = map (showNSPrefix "d") ds_ns
+              as_reassembled = map (\d -> (d, map (\(_, a) -> showNSPrefix "a" a) $ List.filter (\(domain, _) -> d == domain) dom)) ds_ns
+              as_trimmed = List.filter (\(d, as) -> not $ List.null as) as_reassembled
+              show_as    = foldl (\a b -> a ++ "\n" ++ b) ""
+                           (map (\(d, as) -> "    action \"" ++ showNSPrefix "d" d ++ "\" " ++ show as) as_trimmed)
               show_trans = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\((from, action), to) -> "(" ++ show from ++ ", " ++ show action ++ ") ~> " ++ show to) $
+                           (map (\((from, action), to) -> "    (\"" ++ showNSPrefix "s" from ++ "\", \"" ++ showNSPrefix "a" action ++ "\") ~> " ++
+                                 (show $ map (showNSPrefix "s") to)) $
                             Map.toList trans_ns)
               show_obs   = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\((s, d), o) -> "(" ++ show s ++ ", " ++ show d ++ ") >? " ++ show o) $
+                           (map (\((s, d), o) -> "    (\"" ++ showNSPrefix "s" s ++ "\", \"" ++ showNSPrefix "d" d ++ "\") >? " ++ show o) $
                             Map.toList obser)
               show_inter = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\(d1, d2) -> show d1 ++ " >-> " ++ show d2) inter_ns)
+                           (map (\(d1, d2) -> "    \"" ++ showNSPrefix "d" d1 ++ "\" >-> \"" ++ showNSPrefix "d" d2 ++ "\"") inter_ns)
 
 instance Arbitrary (ExistsASSystem) where
     arbitrary = do
