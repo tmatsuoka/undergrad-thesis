@@ -26,15 +26,20 @@ purge sys p actions u = List.filter (\x -> inter p ((dom sys) x) u) actions
 
 sources :: System s a d -> Policy d -> [Action a] -> Domain d -> [Domain d]
 sources sys p []     u = [u]
-sources sys p (a:as) u = let next_sources = sources sys p as u
-                         in let vs = List.filter (\v -> inter p ((dom sys) a) v) next_sources
-                         in if (List.null vs == False)
-                                 then (((dom sys) a) : next_sources)
-                                 else next_sources
+sources sys p (a:as) u = let da = (dom sys) a in
+                         let interp = inter p in
+                         let next_sources = sources sys p as u in
+                         if (List.any (\v -> da `interp` v) next_sources) then
+                            (da : next_sources)
+                         else
+                             next_sources
 
 ipurge :: System s a d -> Policy d -> [Action a] -> Domain d -> [Action a]
 ipurge sys p []     u = []
-ipurge sys p (a:as) u = if (List.elem ((dom sys) a) (sources sys p as u))
-                            then (a : (ipurge sys p as u))
-                            else (ipurge sys p as u)
+ipurge sys p (a:as) u = let da = (dom sys) a in
+                        let next_ipurge = ipurge sys p as u in
+                        if (List.elem da $ sources sys p (a:as) u) then
+                            (a : next_ipurge)
+                        else
+                            next_ipurge
 

@@ -15,7 +15,9 @@ import SecurityBasics
 -- Arbitrary Nats, NatSets and Singletons
 
 instance Arbitrary Nat where
-    arbitrary = (arbitrary :: Gen (Positive Int)) >>= \(Positive x) -> return (intToNat x)
+    arbitrary      = (arbitrary :: Gen (Positive Int)) >>= \(Positive x) -> return (intToNat x)
+    shrink (Suc n) = [n]
+    shrink Zero    = []
 
 instance Arbitrary (Exists Singleton) where
     arbitrary = natToSingleton `fmap` (arbitrary :: Gen Nat)
