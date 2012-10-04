@@ -43,8 +43,8 @@ type PrePolicy = (Set DomainId, Set (DomainId, DomainId))
 emptyPolicy :: PrePolicy
 emptyPolicy = (Set.empty, Set.empty)
 
-setDomains :: [DomainId] -> PrePolicy -> PrePolicy
-setDomains ds (_, inter) = (Set.fromList ds, inter)
+addDomains :: [DomainId] -> PrePolicy -> PrePolicy
+addDomains ds (prev_ds, inter) = (Set.union prev_ds (Set.fromList ds), Set.union inter (Set.fromList $ map (\d -> (d, d)) ds))
 
 addInterference :: (DomainId, DomainId) -> PrePolicy -> PrePolicy
 addInterference tuple (ds, inter) = (ds, Set.insert tuple inter)
@@ -52,7 +52,7 @@ addInterference tuple (ds, inter) = (ds, Set.insert tuple inter)
 -- domains: Domain definition
 
 -- domains :: MonadState InterferenceIds m => [DomainId] -> m ()
-domains ds = modify $ setDomains ds
+domains ds = modify $ addDomains ds
 
 -- (>->): Interference operator
 

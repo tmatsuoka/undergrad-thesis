@@ -71,9 +71,10 @@ instance Arbitrary (ExistsASPolicy) where
     arbitrary = do
         (ExistsNat (d_sing :: Singleton d)) <- (arbitrary :: Gen (Exists Singleton))
         let ds_ns = allNS d_sing
+        let inter_reflex = map (\d -> (d, d)) ds_ns
         inter_a <- randomSubThing d_sing
         inter_b <- randomSubThing d_sing
-        let inter = allPairs inter_a inter_b
+        let inter = List.nub $ inter_reflex ++ (allPairs inter_a inter_b)
         return (ExAP (ds_ns, inter))
 
 instance Show ExistsASPolicy where

@@ -4,11 +4,11 @@ import SecurityChecker
 args :: Args
 args = Args {
     replay     = Nothing,
-    maxSuccess = 500,
+    maxSuccess = 100,
     maxDiscard = 100,
     maxSize    = 10,
     chatty     = True
     }
 
-main = quickCheckWith args prop_p_then_ip
+main = quickCheckWith args prop_ip_then_p
 

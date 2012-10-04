@@ -63,7 +63,7 @@ allWell :: (GenSingleton a, GenSingleton d) =>
            (System s a d -> Domain d -> [Action a] -> Bool) -> 
            Bool
 allWell sys list prop1 prop2 = 
-    let result = List.filter (\(d, as) -> not $ if not (prop1 sys d as) then True else prop2 sys d as) list in
+    let result = List.filter (\(d, as) -> not (if not (prop1 sys d as) then True else prop2 sys d as)) list in
     if (List.null result) then
         True
     else
