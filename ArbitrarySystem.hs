@@ -100,8 +100,10 @@ instance Arbitrary (ExistsASIntermediate) where
         let as_ns = allNS a_sing
         init  <- elements ss_ns
         dom   <- (\a -> do d <- elements ds_ns; return (d, a)) `mapM` as_ns
-        sub_states  <- randomSubThing s_sing
-        sub_actions <- randomSubThing a_sing
+        -- sub_states  <- randomSubThing s_sing
+        -- sub_actions <- randomSubThing a_sing
+        let sub_states  = ss_ns
+        let sub_actions = as_ns
         trans <- Map.fromList `fmap` ((\key -> do to <- elements ss_ns; return (key, [to])) `mapM` (allPairs sub_states sub_actions))
         let sd_pairs = allPairs ss_ns ds_ns
         obser <- Map.fromList `fmap` ((\key -> do obs <- choose (1, length sd_pairs); return (key, show obs)) `mapM` sd_pairs)
