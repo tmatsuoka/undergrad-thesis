@@ -10,5 +10,5 @@ args = Args {
     chatty     = True
     }
 
-main = quickCheckWith args prop_ip_then_p
+main = quickCheckWith args prop_p_then_ip
 

@@ -8,6 +8,8 @@ Thesis "kid's meal": Non-interference checker.
 
 module SecurityChecker where
 
+import Debug.Trace
+
 import qualified Data.List as List
 import Data.Maybe
 import Test.QuickCheck
@@ -60,7 +62,13 @@ allWell :: (GenSingleton a, GenSingleton d) =>
            (System s a d -> Domain d -> [Action a] -> Bool) -> 
            (System s a d -> Domain d -> [Action a] -> Bool) -> 
            Bool
-allWell sys list prop1 prop2 = all (\(d, as) -> if not (prop1 sys d as) then True else prop2 sys d as) list
+allWell sys list prop1 prop2 = 
+    let result = List.filter (\(d, as) -> not $ if not (prop1 sys d as) then True else prop2 sys d as) list in
+    if (List.null result) then
+        True
+    else
+        let (d, as) = List.head result in
+        trace ("Test failed, sequence: " ++ show d ++ ", " ++ show as) False
 
 -- Test property which checks that all P-secure systems are IP-secure. Rushby and van der Meyden proved this is true, so QuickCheck should agree.
 

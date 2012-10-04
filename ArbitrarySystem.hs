@@ -162,11 +162,11 @@ showNSPrefix prefix val = prefix ++ show (natToInt $ nsToNat val)
 
 instance Show ExistsASSystem where
     show (ExAS sys) = "=== QuickCheck generated system ===\n" ++
-                      "let arbitrary_policy = do\n" ++
+                      "arbitrary_policy = do\n" ++
                       "    domains " ++ show ds_string ++ "\n" ++
                       show_inter ++ "\n" ++
                       "\n" ++
-                      "let arbitrary_system = do\n" ++
+                      "arbitrary_system = do\n" ++
                       "    SSDLLite.init \"" ++ showNSPrefix "s" (initial base_sys) ++ "\"\n" ++
                       show_as ++ "\n" ++
                       show_trans ++ "\n" ++
@@ -178,7 +178,7 @@ instance Show ExistsASSystem where
               as_reassembled = map (\d -> (d, map (\(_, a) -> showNSPrefix "a" a) $ List.filter (\(domain, _) -> d == domain) dom)) ds_ns
               as_trimmed = List.filter (\(d, as) -> not $ List.null as) as_reassembled
               show_as    = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\(d, as) -> "    action \"" ++ showNSPrefix "d" d ++ "\" " ++ show as) as_trimmed)
+                           (map (\(d, as) -> "    actions \"" ++ showNSPrefix "d" d ++ "\" " ++ show as) as_trimmed)
               show_trans = foldl (\a b -> a ++ "\n" ++ b) ""
                            (map (\((from, action), to) -> "    (\"" ++ showNSPrefix "s" from ++ "\", \"" ++ showNSPrefix "a" action ++ "\") ~> " ++
                                  (show $ map (showNSPrefix "s") to)) $
