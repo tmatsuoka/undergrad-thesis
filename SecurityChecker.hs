@@ -66,8 +66,8 @@ getCase sys = do
 
 getCases :: (GenSingleton a) => System s a d -> Gen [[Action a]]
 getCases sys = do
-    cases <- vectorOf 100 $ getCase sys -- Generate maximum 100 action sequences per system
-    return (catMaybes cases)
+    cases <- vectorOf 500 $ getCase sys -- Generate maximum 500 action sequences per system
+    return $ List.nub $ (catMaybes cases)
 
 -- Test property which checks that all P-secure systems are IP-secure. Rushby and van der Meyden proved this is true, so QuickCheck should agree.
 
