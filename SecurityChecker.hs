@@ -2,7 +2,7 @@
 
 {-
 
-Thesis "kid's meal": Non-interference checker.
+Thesis main dish: Non-interference checker.
 
 -}
 
@@ -21,39 +21,63 @@ import ArbitrarySystem
 
 import qualified SSDLLite as EDSL
 
+-- Partitions a list into multiple lists, each belonging in an equivalence class of user's choice (equality test supplied as a function).
+-- Similar to Data.List's group/groupBy, but elements (in the same equivalence class) don't have to be next to each other.
+
+split_equiv :: (a -> a -> Bool) -> [a] -> [[a]]
+split_equiv test_f xs = split_equiv' test_f xs []
+    where split_equiv' :: (a -> a -> Bool) -> [a] -> [[a]] -> [[a]]
+          split_equiv' _      []     partials = partials
+          split_equiv' test_f (x:xs) partials =                          -- take first element
+              let (equivs, non_equivs) = List.partition (test_f x) xs in -- split the rest of list into equivalent/non-equivalent parts
+              let this_class = x:equivs in
+              split_equiv' test_f non_equivs (this_class:partials)       -- (x:equivs) is now one equivalence class. Split the rest.
+
 prop_purge_secure :: (GenSingleton d) => System s a d -> [[Action a]] -> Bool
 prop_purge_secure sys list =
-    List.all (\as ->
-        List.all (\d ->
-            let obs_f  = obs sys in
-            let purged = purge sys (policy sys) as d in
-            let other  = List.find (\as2 -> (as /= as2) && (purged == (purge sys (policy sys) as2 d))) list in
-            case other of
-                Just as2 -> let state1 = doRun sys as  in
-                            let state2 = doRun sys as2 in
-                            if (isJust state1 && isJust state2) then
-                                obs_f (fromJust state1) d == obs_f (fromJust state2) d
-                            else True
-                Nothing  -> True
-        ) $ allNS (value :: GenSingleton d => Singleton d)
-    ) list
+    let obs_f = obs sys in
+    List.all (\d ->
+        let purge_equivs = split_equiv (purge_test sys d) list in
+        List.all (\equiv_class ->
+            -- For this purge_equivalence class, generate observation equivalences
+            let obs_equivs = split_equiv (\as1 as2 -> let state1 = doRun sys as1 in
+                                                      let state2 = doRun sys as2 in
+                                                      obs_f (fromJust state1) d == obs_f (fromJust state2) d
+                                         ) equiv_class in
+            -- If this is P-secure then we should get [obs-equiv] == P-equiv.
+            (List.head obs_equivs) == equiv_class
+        ) purge_equivs
+    ) $ allNS (value :: GenSingleton d => Singleton d)
+    where purge_test :: System s a d -> Domain d -> [Action a] -> [Action a] -> Bool
+          purge_test sys d as1 as2 = let state1 = doRun sys as1 in
+                                     let state2 = doRun sys as2 in
+                                     if (isJust state1 && isJust state2) then
+                                         purge sys (policy sys) as1 d == purge sys (policy sys) as2 d
+                                     else
+                                         True -- TODO: this shouldn't be true. If we get this it means system isn't input-enabled.
 
 prop_ipurge_secure :: (GenSingleton d) => System s a d -> [[Action a]] -> Bool
 prop_ipurge_secure sys list =
-    List.all (\as ->
-        List.all (\d ->
-            let obs_f  = obs sys in
-            let purged = ipurge sys (policy sys) as d in
-            let other  = List.find (\as2 -> (as /= as2) && (purged == (ipurge sys (policy sys) as2 d))) list in
-            case other of
-                Just as2 -> let state1 = doRun sys as  in
-                            let state2 = doRun sys as2 in
-                            if (isJust state1 && isJust state2) then
-                                obs_f (fromJust state1) d == obs_f (fromJust state2) d
-                            else True
-                Nothing  -> True
-        ) $ allNS (value :: GenSingleton d => Singleton d)
-    ) list
+    let obs_f = obs sys in
+    List.all (\d ->
+        let ipurge_equivs = split_equiv (ipurge_test sys d) list in
+        List.all (\equiv_class ->
+            -- For this purge_equivalence class, generate observation equivalences
+            let obs_equivs = split_equiv (\as1 as2 -> let state1 = doRun sys as1 in
+                                                      let state2 = doRun sys as2 in
+                                                      obs_f (fromJust state1) d == obs_f (fromJust state2) d
+                                         ) equiv_class in
+            -- If this is IP-secure then we should get [obs-equiv] == IP-equiv.
+            (List.head obs_equivs) == equiv_class
+        ) ipurge_equivs
+    ) $ allNS (value :: GenSingleton d => Singleton d)
+    where ipurge_test :: System s a d -> Domain d -> [Action a] -> [Action a] -> Bool
+          ipurge_test sys d as1 as2 = let state1 = doRun sys as1 in
+                                      let state2 = doRun sys as2 in
+                                      if (isJust state1 && isJust state2) then
+                                          ipurge sys (policy sys) as1 d == purge sys (policy sys) as2 d
+                                      else
+                                          True -- TODO: this shouldn't be true. If we get this it means system isn't input-enabled.
 
 -- getCase: Given a system, generates a random security domain and action sequence.
 

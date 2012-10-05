@@ -4,8 +4,8 @@ import SecurityChecker
 args :: Args
 args = Args {
     replay     = Nothing,
-    maxSuccess = 1000,
-    maxDiscard = 1000,
+    maxSuccess = 100,
+    maxDiscard = 100,
     maxSize    = 10,
     chatty     = True
     }
