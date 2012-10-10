@@ -1,5 +1,5 @@
 import Test.QuickCheck
-import SecurityChecker
+import ICS.Checker
 
 args :: Args
 args = Args {

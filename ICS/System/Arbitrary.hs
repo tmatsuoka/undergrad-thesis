@@ -87,20 +87,31 @@ type ASIntermediate s a d =
 data ExistsASIntermediate where
     ExAI :: (GenSingleton s, GenSingleton a, GenSingleton d) => ASIntermediate s a d -> ExistsASIntermediate
 
-instance Arbitrary (ExistsASIntermediate) where
-    arbitrary = do
-        (ExAP (ds_ns, inter))               <- (arbitrary :: Gen (ExistsASPolicy))
-        (ExistsNat (s_sing :: Singleton s)) <- (arbitrary :: Gen (Exists Singleton))
-        (ExistsNat (a_sing :: Singleton a)) <- (arbitrary :: Gen (Exists Singleton))
-        let ss_ns = allNS s_sing
-        let as_ns = allNS a_sing
-        init  <- elements ss_ns
-        dom   <- (\a -> do d <- elements ds_ns; return (d, a)) `mapM` as_ns
-        -- trans <- Map.fromList `fmap` ((\key -> do to <- randomSubThing s_sing; return (key, to)) `mapM` (allPairs ss_ns as_ns))
-        trans <- Map.fromList `fmap` ((\key -> do to <- elements ss_ns; return (key, [to])) `mapM` (allPairs ss_ns as_ns))
-        let sd_pairs = allPairs ss_ns ds_ns
-        obser <- Map.fromList `fmap` ((\key -> do obs <- choose (1, length sd_pairs); return (key, show obs)) `mapM` sd_pairs)
-        return (ExAI (ss_ns, ds_ns, as_ns, dom, trans, obser, inter, init))
+genASIntermediate' :: (GenSingleton d) => DomainList d -> ASInterferences d -> Gen ExistsASIntermediate
+genASIntermediate' ds_ns inter = do
+    (ExistsNat (s_sing :: Singleton s)) <- (arbitrary :: Gen (Exists Singleton))
+    (ExistsNat (a_sing :: Singleton a)) <- (arbitrary :: Gen (Exists Singleton))
+    let ss_ns = allNS s_sing
+    let as_ns = allNS a_sing
+    init  <- elements ss_ns
+    dom   <- (\a -> do d <- elements ds_ns; return (d, a)) `mapM` as_ns
+    -- First line: generates input enabled non-deterministic systems.
+    -- trans <- Map.fromList `fmap` ((\key -> do to <- randomSubThing s_sing; return (key, to)) `mapM` (allPairs ss_ns as_ns))
+
+    -- Second line: generates deterministic systems.
+    trans <- Map.fromList `fmap` ((\key -> do to <- elements ss_ns; return (key, [to])) `mapM` (allPairs ss_ns as_ns))
+    let sd_pairs = allPairs ss_ns ds_ns
+    obser <- Map.fromList `fmap` ((\key -> do obs <- choose (1, length sd_pairs); return (key, show obs)) `mapM` sd_pairs)
+    return (ExAI (ss_ns, ds_ns, as_ns, dom, trans, obser, inter, init))
+
+genASIntermediate :: Maybe ExistsASPolicy -> Gen ExistsASIntermediate
+genASIntermediate (Just (ExAP (ds_ns, inter))) = genASIntermediate' ds_ns inter
+genASIntermediate Nothing                      = do
+    (ExAP (ds_ns, inter)) <- (arbitrary :: Gen (ExistsASPolicy))
+    genASIntermediate' ds_ns inter
+
+instance Arbitrary ExistsASIntermediate where
+    arbitrary = genASIntermediate Nothing
 
 -- System package
 
@@ -177,8 +188,11 @@ instance Show ExistsASSystem where
               show_inter = foldl (\a b -> a ++ "\n" ++ b) ""
                            (map (\(d1, d2) -> "    \"" ++ showNSPrefix "d" d1 ++ "\" >-> \"" ++ showNSPrefix "d" d2 ++ "\"") inter_ns)
 
-instance Arbitrary (ExistsASSystem) where
-    arbitrary = do
-        intermediate <- (arbitrary :: Gen ExistsASIntermediate)
-        return (buildASExists intermediate)
+genASSystem :: Maybe ExistsASPolicy -> Gen ExistsASSystem
+genASSystem maybe_policy = do
+    intermediate <- genASIntermediate maybe_policy
+    return (buildASExists intermediate)
+
+instance Arbitrary ExistsASSystem where
+    arbitrary = genASSystem Nothing
 

@@ -23,6 +23,7 @@ import ICS.TypeNats
 import ICS.Utility
 import qualified ICS.System.Basics as SB
 import ICS.System.Basics (ObservationSymbol)
+import ICS.System.Arbitrary (ExistsASPolicy(..))
 
 -- EDSL data type and modification functions
 
@@ -307,6 +308,15 @@ makeSystem :: State PrePolicy () -> State EDSLData () -> ExistsEDSLSystem
 makeSystem policyDesc systemDesc = case checkInputEnabled $ prepareEDSL (parsePolicy policyDesc) (parse systemDesc) of
     Left  (ErrorMsg error_msg) -> error error_msg
     Right intermediate         -> buildEDSLExists intermediate
+
+makePolicy :: State PrePolicy () -> ExistsASPolicy
+makePolicy policyDesc =
+    let (ds, inter) = parsePolicy policyDesc in
+    case convertNS $ Set.toList ds of
+        ExA ds_ns -> ExAP (ds_ns_omitted, inter_ns)
+            where
+              ds_ns_omitted    = map fst ds_ns
+              inter_ns         = map (genThingTwo ds_ns ds_ns) $ Set.toList inter
 
 -- System functions that work over EDSL identifiers instead of NatSet n
 
