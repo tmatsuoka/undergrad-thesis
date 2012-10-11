@@ -15,4 +15,4 @@ library
         QuickSCS.Checker
 
     build-depends:
-        base >= 4.5, containers, QuickCheck, ghc-prim
+        base >= 4.5, containers, mtl, QuickCheck, ghc-prim

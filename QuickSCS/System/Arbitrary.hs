@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, ScopedTypeVariables, FlexibleInstances #-}
+{-# LANGUAGE DoAndIfThenElse, GADTs, ScopedTypeVariables, FlexibleInstances #-}
 
 module QuickSCS.System.Arbitrary where
 
