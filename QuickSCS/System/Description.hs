@@ -8,9 +8,7 @@ state list, action list and transition map, with a help of State monad.
 
 -}
 
-module ICS.System.Description where
-
-import Debug.Trace
+module QuickSCS.System.Description where
 
 import Control.Monad.State
 import qualified Data.List as List
@@ -19,11 +17,11 @@ import Data.Set (Set)
 import qualified Data.Map as Map
 import Data.Map (Map)
 
-import ICS.TypeNats
-import ICS.Utility
-import qualified ICS.System.Basics as SB
-import ICS.System.Basics (ObservationSymbol)
-import ICS.System.Arbitrary (ExistsASPolicy(..))
+import QuickSCS.TypeNats
+import QuickSCS.Utility
+import qualified QuickSCS.System.Basics as SB
+import QuickSCS.System.Basics (ObservationSymbol)
+import QuickSCS.System.Arbitrary (ExistsASPolicy(..))
 
 -- EDSL data type and modification functions
 
@@ -269,34 +267,47 @@ getEDSLIntermediate :: EDSLSystem s a d -> EDSLIntermediate s a d
 getEDSLIntermediate (ES _ intermediate) = intermediate
 
 instance Show ExistsEDSLSystem where
-    show (ExES sys) = "=== EDSL generated system ===\n" ++
-                      "Initial state: " ++ show (SB.initial base_sys) ++ "\n" ++
-                      "States: " ++ show ss_ns ++ "\n" ++
-                      "Domains: " ++ show ds_ns ++ "\n" ++
-                      "Actions: " ++ show dom ++ "\n" ++
-                      "Transitions: " ++ show_trans ++ "\n" ++
-                      "Observations: " ++ show_obs ++ "\n" ++
-                      "Interferences: " ++ show_inter
+    show (ExES sys) = "=== EDSL system ===\n" ++
+                      "edsl_policy = do\n" ++
+                      "    domains " ++ show ds_string ++ "\n" ++
+                      show_inter ++ "\n" ++
+                      "\n" ++
+                      "edsl_system = do\n" ++
+                      "    start \"" ++ lookupId (SB.initial base_sys) ss_ns ++ "\"\n" ++
+                      show_as ++ "\n" ++
+                      show_trans ++ "\n" ++
+                      show_obs
         where base_sys = getEDSLBase sys
               (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, _) = getEDSLIntermediate sys
+              ss_string  = map snd ss_ns
+              ds_string  = map snd ds_ns
+              as_reassembled = map (\(d, _) -> (d, map (\(_, a) -> lookupId a as_ns) $ List.filter (\(domain, _) -> d == domain) dom)) ds_ns
+              as_trimmed = List.filter (\(d, as) -> not $ List.null as) as_reassembled
+              show_as    = foldl (\a b -> a ++ "\n" ++ b) ""
+                           (map (\(d, as) -> "    actions \"" ++ lookupId d ds_ns ++ "\" " ++ show as) as_trimmed)
               show_trans = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\((from, action), to) -> "(" ++ show from ++ ", " ++ show action ++ ") ~> " ++ show to) $
+                           (map (\((from, action), to) -> "    (\"" ++ lookupId from ss_ns ++ "\", \"" ++ lookupId action as_ns ++ "\") ~> " ++
+                                 (show $ map (\s_ns -> lookupId s_ns ss_ns) to)) $
                             Map.toList trans_ns)
               show_obs   = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\((s, d), o) -> "(" ++ show s ++ ", " ++ show d ++ ") >? " ++ show o) $
+                           (map (\((s, d), o) -> "    (\"" ++ lookupId s ss_ns ++ "\", \"" ++ lookupId d ds_ns ++ "\") >? " ++ show o) $
                             Map.toList obser)
               show_inter = foldl (\a b -> a ++ "\n" ++ b) ""
-                           (map (\(d1, d2) -> show d1 ++ " >-> " ++ show d2) inter_ns)
+                           (map (\(d1, d2) -> "    \"" ++ lookupId d1 ds_ns ++ "\" >-> \"" ++ lookupId d2 ds_ns ++ "\"") inter_ns)
 
 -- Stage 2: Pack the intermediate representation into System.
 
 buildEDSL :: EDSLIntermediate s a d -> SB.System s a d
 buildEDSL (ss_ns, ds_ns, as_ns, dom, trans_ns, obser, inter_ns, init) = SB.System {
-    SB.initial = init,
-    SB.step    = eDSLstep trans_ns,
-    SB.obs     = eDSLobs obser,
-    SB.dom     = eDSLdom dom,
-    SB.policy  = buildPolicy inter_ns
+    SB.initial     = init,
+    SB.step        = eDSLstep trans_ns,
+    SB.obs         = eDSLobs obser,
+    SB.dom         = eDSLdom dom,
+    SB.policy      = buildPolicy inter_ns,
+    SB.actions     = map fst as_ns,
+    SB.show_state  = \s -> lookupId s ss_ns,
+    SB.show_action = \a -> lookupId a as_ns,
+    SB.show_domain = \d -> lookupId d ds_ns
 }
 
 buildEDSLExists :: ExistsEDSLIntermediate -> ExistsEDSLSystem
@@ -343,7 +354,7 @@ runEDSL :: ExistsEDSLSystem -> [StateId] -> [ActionId] -> [StateId]
 runEDSL _   ss [] = ss
 runEDSL sys ss (a:as) =
     let nexts = List.concatMap (\s -> stepEDSL sys s a) ss in
-    List.nub $ nexts ++ List.concatMap (\x -> runEDSL sys [x] as) nexts
+    List.nub $ List.concatMap (\x -> runEDSL sys [x] as) nexts
 
 doRunEDSL :: ExistsEDSLSystem -> [ActionId] -> [StateId]
 doRunEDSL exEs@(ExES sys) as = runEDSL exEs [init] as

@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, DataKinds, KindSignatures, FlexibleInstances #-}
 
-module ICS.TypeNats where
+module QuickSCS.TypeNats where
 
 -- Peano naturals, used to represent Ints on type level
 data Nat = Zero | Suc Nat deriving (Eq, Ord)
@@ -25,7 +25,11 @@ instance Show (NatSet n) where
     show x = "NS" ++ show (natToInt $ nsToNat x)
 
 instance Eq (NatSet n) where
-    (==) m n = (nsToNat m) == (nsToNat n)
+--    (==) m n = (nsToNat m) == (nsToNat n)
+    (==) NSZero    NSZero    = True
+    (==) NSZero    _         = False
+    (==) _         NSZero    = False
+    (==) (NSSuc m) (NSSuc n) = m == n
 
 instance Ord (NatSet n) where
     compare m n = compare (nsToNat m) (nsToNat n)

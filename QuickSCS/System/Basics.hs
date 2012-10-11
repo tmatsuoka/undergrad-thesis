@@ -1,9 +1,9 @@
 {-# LANGUAGE GADTs #-}
 
-module ICS.System.Basics where
+module QuickSCS.System.Basics where
 
 import Data.List
-import ICS.TypeNats
+import QuickSCS.TypeNats
 
 type State  s = NatSet s
 type Action a = NatSet a
@@ -20,7 +20,12 @@ data System s a d = System
       step    :: State  s -> Action a -> [State s],
       obs     :: State  s -> Domain d -> ObservationSymbol,
       dom     :: Action a -> Domain d,
-      policy  :: Policy d
+      -- Ugly stuff below
+      policy  :: Policy d,
+      actions :: [Action a],
+      show_state  :: State  s -> String,
+      show_action :: Action a -> String,
+      show_domain :: Domain d -> String
     };
 
 data ExistsSystem where
@@ -30,7 +35,7 @@ run :: System s a d -> [State s] -> [Action a] -> [State s]
 run _   ss [] = ss
 run sys ss (a:as) =
     let nexts = concatMap (\s -> (step sys) s a) ss in
-    nub $ nexts ++ concatMap (\x -> run sys [x] as) nexts
+    nub $ concatMap (\x -> run sys [x] as) nexts
 
 doRun :: System s a d -> [Action a] -> [State s]
 doRun sys as = run sys [initial sys] as
