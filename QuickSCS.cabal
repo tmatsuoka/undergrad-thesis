@@ -10,6 +10,7 @@ library
         QuickSCS.System.Basics
         QuickSCS.System.Arbitrary
         QuickSCS.System.Description
+        QuickSCS.System.GraphVizDrawer
         QuickSCS.Security.Prelude
         QuickSCS.Checker
 
