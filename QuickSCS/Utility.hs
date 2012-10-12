@@ -8,6 +8,7 @@
 
 module QuickSCS.Utility where
 
+import Debug.Trace
 import QuickSCS.System.Basics
 import Data.List
 
@@ -41,10 +42,12 @@ split_equiv test_f xs = split_equiv' test_f xs []
               let this_class = x:equivs in
               split_equiv' test_f non_equivs (this_class:partials)  -- (x:equivs) is now one equivalence class. Split the rest.
 
-split_equiv_map :: (Eq b, Ord b) => (a -> b) -> [a] -> [[a]]
+split_equiv_map :: (Show a, Show b, Eq b, Ord b) => (a -> b) -> [a] -> [[a]]
 split_equiv_map transformer xs =
     let transformed = map (\x -> (x, transformer x)) xs in
-    map (\group -> map fst group) $ groupBy (\(_, y1) (_, y2) -> y1 == y2) $ sortBy (\(_, y1) (_, y2) -> compare y1 y2) transformed
+    let transformed_group = groupBy (\(_, y1) (_, y2) -> y1 == y2) $ sortBy (\(_, y1) (_, y2) -> compare y1 y2) transformed in
+    -- traceShow transformed_group $ map (\group -> map fst group) transformed_group
+    map (\group -> map fst group) transformed_group
 
 -- Given domain and list of action sequences, check if all actions will result in the same observation(s).
 

@@ -17,11 +17,11 @@ import QuickSCS.System.Basics
 
 instance Arbitrary Nat where
     arbitrary = (arbitrary :: Gen (Positive Int)) >>= \(Positive x) -> return (intToNat x)
-    shrink n  = map intToNat (shrink $ natToInt n)
+    -- shrink n  = map intToNat (shrink $ natToInt n)
 
 instance Arbitrary (Exists Singleton) where
     arbitrary            = natToSingleton `fmap` (arbitrary :: Gen Nat)
-    shrink (ExistsNat n) = natToSingleton `fmap` (shrink $ singletonToNat n)
+    -- shrink (ExistsNat n) = natToSingleton `fmap` (shrink $ singletonToNat n)
 
 genMinBoundedSingleton :: Int -> Gen (Exists Singleton)
 genMinBoundedSingleton minimum = sized (\size -> do val <- choose (minimum, minimum `max` size)

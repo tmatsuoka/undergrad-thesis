@@ -17,14 +17,5 @@ ta_policy = do
     "D1" >-> "L"
     "D2" >-> "L"
 
-args :: Args
-args = Args {
-    replay     = Nothing,
-    maxSuccess = 100,
-    maxDiscard = 100,
-    maxSize    = 10,
-    chatty     = True
-    }
-
 main = separate prop_ipurge_secure prop_ta_secure (Just $ makePolicy ta_policy)
 

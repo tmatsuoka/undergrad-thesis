@@ -15,6 +15,7 @@ import QuickSCS.System.Arbitrary
 import QuickSCS.System.Description hiding (actions)
 import QuickSCS.Security.Prelude
 
+import Control.Exception
 import Control.Monad
 import Data.List
 import Test.QuickCheck hiding (Result)
@@ -27,11 +28,11 @@ type SecureProperty = forall s. forall a. forall d. (GenSingleton a, GenSingleto
 
 getCase :: (GenSingleton a) => System s a d -> Gen ([Action a])
 getCase sys =
-    listOf1 $ (arbitrary :: GenSingleton a => Gen (NatSet a))
+    listOf $ (arbitrary :: GenSingleton a => Gen (NatSet a))
 
 getCases :: (GenSingleton a) => System s a d -> Gen [[Action a]]
 getCases sys = do
-    cases   <- liftM nub $ vectorOf 500 $ getCase sys
+    cases   <- liftM nub $ vectorOf 2000 $ getCase sys
     return cases
     -- let obsers = split_equiv_map (doRun sys) cases
     -- return $ map (head) obsers
@@ -51,15 +52,15 @@ getCasesShrink a_seqs = map (shrink) a_seqs
 
 args :: Args
 args = Args {
-    replay     = Nothing,
-    maxSuccess = 500,
-    maxDiscard = 1000,
-    maxSize    = 5,
-    chatty     = True
+    replay          = Nothing,
+    maxSuccess      = 100000,
+    maxDiscardRatio = 1000000,
+    maxSize         = 15,
+    chatty          = True
     }
 
 verify' :: (GenSingleton a, GenSingleton d) => System s a d -> (System s a d -> [[Action a]] -> Result) -> IO ()
-verify' sys prop = quickCheck $ forAll (getCases sys) $ (\list -> prop sys list)
+verify' sys prop = quickCheckWith args $ forAll (getCases sys) $ (\list -> prop sys list)
 
 -- verify: Given an EDSL system, checks if the system satisfies the given security definition.
 verify :: ExistsEDSLSystem -> SecureProperty -> IO ()
@@ -72,9 +73,16 @@ prop_all prop (ExAS (AS sys _)) =
 
 prop_imply :: SecureProperty -> SecureProperty -> ExistsASSystem -> Property
 prop_imply first second (ExAS (AS sys _)) =
-    forAll (getCases sys) (\list -> case first sys list of
-                                      MkResult { ok = Just True } -> second sys list
-                                      otherwise                   -> MkResult Nothing True "" False [] [])
+    forAll (getCases sys) (\list -> let first_res = first sys list in
+                                    case first_res of
+                                        MkResult { ok = Just True } ->
+                                            let second_res = second sys list in
+                                            case second_res of
+                                                MkResult { ok = Just False } -> assert (ok first_res == Just True) second_res
+                                                otherwise                    -> assert (ok second_res /= Just False) second_res
+                                        otherwise                   -> rejected)
+--     forAll (getCases sys) (\list -> first sys list .&&. second sys list)
+
 -- let list = getCases sys 10 in first sys list ==> second sys list
 
 falsifySample :: SecureProperty -> Maybe ExistsASPolicy -> IO ()

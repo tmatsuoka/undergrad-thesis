@@ -13,19 +13,13 @@ import QuickSCS.System.Basics
 import QuickSCS.System.Description hiding (obs)
 import QuickSCS.Utility
 
+import Debug.Trace
+import Control.Exception
 import Data.List
 import Data.Either
 import Test.QuickCheck.Property
 
 -- Types
-
-prop_secure_stub :: (System s a d -> Domain d -> [Action a] -> [Action a] -> Bool) ->
-                    (GenSingleton d) => System s a d -> [[Action a]] -> Bool
-prop_secure_stub equiv_test sys list =
-    all (\d ->
-        let equivs = split_equiv (equiv_test sys d) list in
-        all (obsEq sys d) equivs
-    ) $ allNS (value :: GenSingleton d => Singleton d)
 
 prop_secure_single_stub :: (System s a d -> Domain d -> [Action a] -> [Action a]) ->
                            (GenSingleton d) => System s a d -> [[Action a]] -> Result
@@ -34,7 +28,8 @@ prop_secure_single_stub purger sys list =
                             map (\as ->
                                 let orig_obs = map (\s -> (obs sys) s d) $ doRun sys as in
                                 let purged_obs = map (\s -> (obs sys) s d) $ doRun sys (purger sys d as) in
-                                if (orig_obs == purged_obs) then
+                                -- traceShow (doRun sys as, doRun sys (purger sys d as)) $
+                                assert (length orig_obs == 1 && length purged_obs == 1) $ if (orig_obs == purged_obs) then
                                     Right True
                                 else
                                     Left (d, as, orig_obs, purged_obs)
@@ -44,38 +39,27 @@ prop_secure_single_stub purger sys list =
     if (not $ null wrongs) then
         case head wrongs of
         (fail_d, fail_as, fail_obs, fail_purged) ->
-            MkResult {
-                ok = Just False,
-                expect = True,
+            failed {
                 reason = ("Security check failed:\nFor this domain \"" ++ (show_domain sys) fail_d ++ "\"" ++
                           " and actions " ++ (show $ map (show_action sys) fail_as) ++ ":\n" ++
-                          "Original observation is " ++ show fail_obs ++ ", but after purge it is " ++ show fail_purged),
-                interrupted = False,
-                stamp = [],
-                callbacks = []
+                          "Original observation is " ++ show fail_obs ++ ", but after purge it is " ++ show fail_purged)
             }
     else
-        MkResult {
-            ok = Just True,
-            expect = True,
-            reason = "",
-            interrupted = False,
-            stamp = [],
-            callbacks = []
-        }
+        succeeded
 
 obsEqRes sys d as = obsEqRes' sys d as Nothing
     where obs_f = obs sys
           obsEqRes' sys d []     _                       = Right True
-          obsEqRes' sys d (a:as) Nothing                 = let a_obs = obs_f (head $ doRun sys a) d in
-                                                           obsEqRes' sys d as (Just (a, a_obs))
-          obsEqRes' sys d (a:as) (Just (prev, prev_obs)) = let a_obs = obs_f (head $ doRun sys a) d in
+          obsEqRes' sys d (a:as) Nothing                 = let a_obs = map (\x -> obs_f x d) $ doRun sys a in
+                                                           assert (length a_obs == 1) $ obsEqRes' sys d as (Just (a, a_obs))
+          obsEqRes' sys d (a:as) (Just (prev, prev_obs)) = let a_obs = map (\x -> obs_f x d) $ doRun sys a in
+                                                           assert (length a_obs == 1) $
                                                            if (prev_obs == a_obs) then
                                                                obsEqRes' sys d as (Just (a, a_obs))
                                                            else
                                                                Left (d, prev, prev_obs, a, a_obs)
 
-prop_secure_map_stub :: (Eq b, Ord b) => (System s a d -> Domain d -> [Action a] -> b) ->
+prop_secure_map_stub :: (Show b, Eq b, Ord b) => (System s a d -> Domain d -> [Action a] -> b) ->
                     (GenSingleton d) => System s a d -> [[Action a]] -> Result
 prop_secure_map_stub transformer sys list =
     let obsers = concatMap (\d ->
@@ -86,25 +70,13 @@ prop_secure_map_stub transformer sys list =
     if (not $ null wrongs) then
         case head wrongs of
         (fail_d, fail1, fail_obs1, fail2, fail_obs2) ->
-            MkResult {
-                ok = Just False,
-                expect = True,
+            failed {
                 reason = ("Security check failed:\nFor this domain \"" ++ (show_domain sys) fail_d ++ "\"" ++
                           " and actions " ++ (show $ map (show_action sys) fail1) ++ " and " ++ (show $ map (show_action sys) fail2) ++ ":\n" ++
-                          "Observations are different; respectively they are " ++ show fail_obs1 ++ " and " ++ show fail_obs2),
-                interrupted = False,
-                stamp = [],
-                callbacks = []
+                          "Observations are different; respectively they are " ++ show fail_obs1 ++ " and " ++ show fail_obs2)
             }
     else
-        MkResult {
-            ok = Just True,
-            expect = True,
-            reason = "",
-            interrupted = False,
-            stamp = [],
-            callbacks = []
-        }
+        succeeded
 
 -- Transitive Purge
 
