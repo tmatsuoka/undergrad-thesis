@@ -1,3 +1,5 @@
+{-# LANGUAGE RankNTypes #-}
+
 ------------------------------------
 --
 -- QuickSCS.Security.Prelude
